@@ -1,0 +1,67 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_spec_management
+  name: Spec Management
+  featureId: "N6"
+  status: deployed
+  priority: P0
+  description: Declarative YAML spec files for defining graph nodes and edges outside of code
+
+actions:
+  - id: act_ingest_specs
+    name: Ingest Specs
+    actionType: mutate
+    inputType: form
+    description: Parse YAML spec files, resolve references, and sync to the graph database
+
+  - id: act_validate_specs
+    name: Validate Specs
+    actionType: query
+    inputType: form
+    description: Schema and reference validation of spec files without touching the database
+
+  - id: act_export_specs
+    name: Export Specs
+    actionType: query
+    inputType: form
+    description: Export graph data to YAML spec files grouped by feature
+
+  - id: act_enrich_ids
+    name: Enrich IDs
+    actionType: mutate
+    inputType: form
+    description: Write system-generated node IDs back into YAML spec files
+
+rules:
+  - id: rul_spec_files_must_pass_zod_validation
+    name: Spec files must pass Zod validation
+    ruleType: validation
+    enforcement: server
+    priority: critical
+    description: All *.graph.yaml files must conform to the spec file schema before ingestion
+    constrains:
+      - Ingest Specs
+
+  - id: rul_references_must_resolve
+    name: References must resolve
+    ruleType: validation
+    enforcement: server
+    priority: important
+    description: Inline edge references must resolve to known nodes via name index or DB fallback
+    constrains:
+      - Ingest Specs
+      - Validate Specs
+
+  - id: rul_id_anchors_identity_on_rename
+    name: ID anchors identity on rename
+    ruleType: behavior
+    enforcement: server
+    priority: critical
+    description: Once assigned, a node ID anchors identity — renaming name does not create a new node
+    constrains:
+      - Ingest Specs
+
+edges: []

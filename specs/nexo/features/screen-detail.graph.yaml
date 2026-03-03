@@ -1,0 +1,118 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_screen_detail
+  name: Screen Detail
+  featureId: "N2"
+  status: deployed
+  priority: P0
+  description: Detailed view of a Screen node showing all connected relationships
+
+screens:
+  - id: scr_screen_detail
+    name: Screen Detail
+    route: "/screens/:screenId"
+    accessLevel: public
+    description: Shows components, actions, rules, states, data, source files, and feature for a screen
+    renders:
+      - Components Section
+      - User Actions Section
+      - Business Rules Section
+      - Required States Section
+      - Data Accessed Section
+      - Source File Section
+      - Feature Section
+
+components:
+  - id: cmp_components_section
+    name: Components Section
+    componentType: presentational
+    description: Lists components rendered by the screen with action count
+
+  - id: cmp_user_actions_section
+    name: User Actions Section
+    componentType: presentational
+    description: Lists user actions triggered by the screen's components
+
+  - id: cmp_business_rules_section
+    name: Business Rules Section
+    componentType: presentational
+    description: Lists rules that constrain actions or validate fields
+
+  - id: cmp_required_states_section
+    name: Required States Section
+    componentType: presentational
+    description: Lists user states required by the screen
+
+  - id: cmp_data_accessed_section
+    name: Data Accessed Section
+    componentType: presentational
+    description: Shows data entities and fields accessed via screen's components
+
+  - id: cmp_source_file_section
+    name: Source File Section
+    componentType: presentational
+    description: Shows the source file implementing this screen
+
+  - id: cmp_feature_section
+    name: Feature Section
+    componentType: presentational
+    description: Shows the feature this screen belongs to
+
+  - id: cmp_panel_router
+    name: Panel Router
+    componentType: navigation
+    description: Routes drill-in panel to Component or Generic panel based on node type
+    renders_on:
+      - Screen Detail
+    triggers:
+      - Drill Into Node
+
+actions:
+  - id: act_view_screen_detail
+    name: View Screen Detail
+    actionType: navigate
+    inputType: tap
+    calls:
+      - "GET /nodes/{id}"
+      - "GET /nodes/{id}/edges"
+
+  - id: act_drill_into_node
+    name: Drill Into Node
+    actionType: navigate
+    inputType: tap
+    description: Opens slide-in panel with detail view for any connected node
+    calls:
+      - "GET /nodes/{id}"
+
+endpoints:
+  - id: api_get_nodes_id
+    name: "GET /nodes/{id}"
+    method: GET
+    path: "/nodes/{id}"
+    authRequired: false
+    description: Fetch a single node by ID
+    reads:
+      - Node
+
+  - id: api_get_nodes_id_edges
+    name: "GET /nodes/{id}/edges"
+    method: GET
+    path: "/nodes/{id}/edges"
+    authRequired: false
+    description: Fetch all edges touching a node
+    reads:
+      - Edge
+
+  - id: api_get_nodes
+    name: GET /nodes
+    method: GET
+    path: /nodes
+    authRequired: false
+    description: Fetch multiple nodes by IDs query parameter
+    reads:
+      - Node
+
+edges: []

@@ -1,0 +1,113 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_query_studio
+  name: Query Studio
+  featureId: "N4"
+  status: deployed
+  priority: P1
+  description: Interactive query builder with 12 pre-built templates, history, and multi-format results
+
+screens:
+  - id: scr_query_studio
+    name: Query Studio
+    route: /query
+    accessLevel: public
+    description: Two-column layout with template/history panel and results panel
+    renders:
+      - Template Card
+      - Node Selector
+      - Node Type Selector
+      - Results View
+
+components:
+  - id: cmp_template_card
+    name: Template Card
+    componentType: interactive
+    description: Expandable card for a query template with node/type selectors and Run button
+    triggers:
+      - Run Query
+
+  - id: cmp_node_selector
+    name: Node Selector
+    componentType: interactive
+    description: Autocomplete search to pick a node by name, filterable by allowed types
+    triggers:
+      - Select Node
+    displays:
+      - Node.name
+
+  - id: cmp_node_type_selector
+    name: Node Type Selector
+    componentType: interactive
+    description: Dropdown to select a node type for query filtering
+    displays:
+      - Node.type
+
+  - id: cmp_results_view
+    name: Results View
+    componentType: presentational
+    description: Tabbed results display with Cards, Table, Graph, and Export views
+
+  - id: cmp_cards_view
+    name: Cards View
+    componentType: presentational
+    description: Result nodes rendered as cards showing connection type and depth
+
+  - id: cmp_table_view
+    name: Table View
+    componentType: presentational
+    description: Tabular view of query result nodes
+
+  - id: cmp_graph_view
+    name: Graph View
+    componentType: presentational
+    description: D3 subgraph visualization of query results and connecting edges
+
+  - id: cmp_export_view
+    name: Export View
+    componentType: interactive
+    description: JSON and CSV export of query results
+    triggers:
+      - Export Results
+
+actions:
+  - id: act_run_query
+    name: Run Query
+    actionType: query
+    inputType: tap
+    description: Executes selected template with chosen node/type parameters
+    calls:
+      - "GET /traverse/{id}"
+      - "GET /impact/{id}"
+
+  - id: act_export_results
+    name: Export Results
+    actionType: query
+    inputType: tap
+    description: Downloads query results as JSON or CSV
+
+endpoints:
+  - id: api_get_traverse_id
+    name: "GET /traverse/{id}"
+    method: GET
+    path: "/traverse/{id}"
+    authRequired: false
+    description: BFS traversal from a node with configurable depth and edge type filters
+    reads:
+      - Node
+      - Edge
+
+  - id: api_get_impact_id
+    name: "GET /impact/{id}"
+    method: GET
+    path: "/impact/{id}"
+    authRequired: false
+    description: Impact analysis classifying direct and structural impacts
+    reads:
+      - Node
+      - Edge
+
+edges: []

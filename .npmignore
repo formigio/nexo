@@ -1,0 +1,29 @@
+# Source (dist/ is the published artifact)
+src/
+web-console/
+specs/
+docs/
+docker/
+.warden/
+.github/
+e2e/
+
+# Dev files
+.env
+.env.example
+.dockerignore
+docker-compose.yml
+tsconfig.json
+CONTRIBUTING.md
+CLAUDE.md
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local config
+.nexo/
+.claude/
+.idea/
+local/
+surreal-data/

@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  /* Node type colors */
+  --color-node-screen: #58a6ff;
+  --color-node-api: #3fb950;
+  --color-node-rule: #f85149;
+  --color-node-component: #d2a8ff;
+  --color-node-feature: #ffa657;
+  --color-node-entity: #79c0ff;
+  --color-node-field: #a8d8f0;
+  --color-node-action: #ffd700;
+  --color-node-state: #ff7b72;
+  --color-node-infra: #8b949e;
+  --color-node-file: #56d364;
+
+  /* Status colors */
+  --color-status-deployed: #3fb950;
+  --color-status-progress: #ffa657;
+  --color-status-proposed: #8b949e;
+  --color-status-deprecated: #6e7681;
+
+  /* Impact severity */
+  --color-impact-breaking: #f85149;
+  --color-impact-update: #ffa657;
+  --color-impact-info: #8b949e;
+
+  /* Surfaces */
+  --color-bg-body: #0f1117;
+  --color-surface-1: #161b22;
+  --color-surface-2: #21262d;
+  --color-border-default: #30363d;
+  --color-border-subtle: #21262d;
+
+  /* Text */
+  --color-text-primary: #e1e4e8;
+  --color-text-secondary: #8b949e;
+  --color-text-dim: #6e7681;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background-color: var(--color-bg-body);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-dim);
+}
+
+/* Slide-in panel animation */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in {
+  animation: slide-in-right 200ms ease-out;
+}
+
+/* Graph highlight pulse */
+@keyframes pulse-ring {
+  0% { stroke-opacity: 0.8; r: inherit; }
+  50% { stroke-opacity: 0.3; }
+  100% { stroke-opacity: 0.8; }
+}
+
+.pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}

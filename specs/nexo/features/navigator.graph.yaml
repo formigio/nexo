@@ -1,0 +1,86 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_navigator
+  name: Navigator
+  featureId: "N1"
+  status: deployed
+  priority: P0
+  description: Sidebar navigator with hierarchical screen tree and flat node list by type
+
+screens:
+  - id: scr_welcome
+    name: Welcome
+    route: /
+    accessLevel: public
+    description: Landing page prompting user to select a node from the sidebar
+
+components:
+  - id: cmp_navigator_panel
+    name: Navigator Panel
+    componentType: navigation
+    description: Type selector dropdown with conditional rendering of ScreenTree or NodeList
+    renders_on:
+      - Welcome
+    triggers:
+      - Select Node Type
+
+  - id: cmp_screen_tree
+    name: Screen Tree
+    componentType: navigation
+    description: Hierarchical screen list grouped by access level with search
+    triggers:
+      - Select Screen
+
+  - id: cmp_node_list
+    name: Node List
+    componentType: navigation
+    description: Flat searchable list of nodes filtered by selected type
+    triggers:
+      - Select Node
+
+actions:
+  - id: act_select_node_type
+    name: Select Node Type
+    actionType: navigate
+    inputType: tap
+
+  - id: act_select_screen
+    name: Select Screen
+    actionType: navigate
+    inputType: tap
+    navigates_to:
+      - Screen Detail
+    calls:
+      - GET /screens
+
+  - id: act_select_node
+    name: Select Node
+    actionType: navigate
+    inputType: tap
+    calls:
+      - "GET /nodes/search"
+
+endpoints:
+  - id: api_get_screens
+    name: GET /screens
+    method: GET
+    path: /screens
+    authRequired: false
+    description: Fetch hierarchical screen tree with CHILD_OF edges
+    reads:
+      - Node
+      - Edge
+
+  - id: api_get_nodes_search
+    name: "GET /nodes/search"
+    method: GET
+    path: "/nodes/search"
+    authRequired: false
+    description: Search/list nodes by query, app, and type
+    reads:
+      - Node
+
+edges: []

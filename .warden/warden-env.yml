@@ -1,0 +1,65 @@
+services:
+  surrealdb:
+    hostname: ${WARDEN_ENV_NAME}-surrealdb
+    image: surrealdb/surrealdb:v3
+    user: "0:0"
+    command: start --log info --user ${SURREAL_USER:-root} --pass ${SURREAL_PASS:-root} surrealkv:/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${WARDEN_ENV_NAME}-surrealdb.tls=true
+      - traefik.http.routers.${WARDEN_ENV_NAME}-surrealdb.rule=Host(`db.${TRAEFIK_DOMAIN}`)
+      - traefik.http.services.${WARDEN_ENV_NAME}-surrealdb.loadbalancer.server.port=8000
+      - traefik.docker.network=${WARDEN_ENV_NAME}_default
+    volumes:
+      - surrealdata:/data
+    healthcheck:
+      test: ["CMD", "/surreal", "isready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    hostname: ${WARDEN_ENV_NAME}-api
+    image: node:22-slim
+    working_dir: /app
+    command: node dist/cli/index.js web --port 3000 --host 0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/apps').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${WARDEN_ENV_NAME}-api.tls=true
+      - traefik.http.routers.${WARDEN_ENV_NAME}-api.rule=Host(`app.${TRAEFIK_DOMAIN}`)
+      - traefik.http.services.${WARDEN_ENV_NAME}-api.loadbalancer.server.port=3000
+      - traefik.docker.network=${WARDEN_ENV_NAME}_default
+    volumes:
+      - ./dist:/app/dist:ro
+      - ./node_modules:/app/node_modules:ro
+      - ./package.json:/app/package.json:ro
+    environment:
+      NEXO_DB_URL: http://surrealdb:8000
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+
+  console:
+    hostname: ${WARDEN_ENV_NAME}-console
+    image: nginx:alpine
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${WARDEN_ENV_NAME}-console.tls=true
+      - traefik.http.routers.${WARDEN_ENV_NAME}-console.rule=Host(`${TRAEFIK_DOMAIN}`)
+      - traefik.http.services.${WARDEN_ENV_NAME}-console.loadbalancer.server.port=80
+      - traefik.docker.network=${WARDEN_ENV_NAME}_default
+    volumes:
+      - ./web-console/dist:/usr/share/nginx/html:ro
+      - ./.warden/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+volumes:
+  surrealdata:

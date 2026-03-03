@@ -1,0 +1,11 @@
+nexo: "1.0"
+app: nexo
+kind: infra
+
+resources:
+  - id: inf_surrealdb
+    name: SurrealDB
+    provider: surrealdb
+    service: database
+    environment: both
+    description: Graph database storing all nodes and edges

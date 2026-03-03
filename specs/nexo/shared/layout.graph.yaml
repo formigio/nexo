@@ -1,0 +1,44 @@
+nexo: "1.0"
+app: nexo
+kind: shared
+
+components:
+  - id: cmp_toolbar
+    name: Toolbar
+    componentType: navigation
+    description: Header bar with logo, app selector, nav tabs, and search
+
+  - id: cmp_sidebar
+    name: Sidebar
+    componentType: layout
+    description: Collapsible left sidebar container
+
+  - id: cmp_main_area
+    name: Main Area
+    componentType: layout
+    description: Primary content region with vertical scroll
+
+  - id: cmp_slide_in_panel
+    name: Slide-In Panel
+    componentType: layout
+    description: Right-side drill-in panel with breadcrumb navigation and back/close buttons
+
+  - id: cmp_node_pill
+    name: Node Pill
+    componentType: presentational
+    description: Inline node display with colored type dot and name
+
+  - id: cmp_type_badge
+    name: Type Badge
+    componentType: presentational
+    description: Colored badge showing node type label
+
+  - id: cmp_force_graph
+    name: Force Graph
+    componentType: interactive
+    description: D3v7 force-directed graph with zoom, pan, drag, and selection highlighting
+
+  - id: cmp_expandable_section
+    name: Expandable Section
+    componentType: interactive
+    description: Collapsible section with title, count badge, and toggle icon

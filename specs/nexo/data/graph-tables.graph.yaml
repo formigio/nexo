@@ -1,0 +1,51 @@
+nexo: "1.0"
+app: nexo
+kind: data
+
+entities:
+  - id: ent_node
+    name: Node
+    storageType: surrealdb
+    description: SCHEMAFULL table storing all graph nodes with type discriminator
+    stored_in: SurrealDB
+    fields:
+      - id: fld_node_type
+        name: Node.type
+        fieldType: enum
+        required: true
+        enumValues: [Screen, Component, UserState, UserAction, APIEndpoint, DataEntity, DataField, BusinessRule, Feature, InfraResource, SourceFile]
+      - id: fld_node_name
+        name: Node.name
+        fieldType: string
+        required: true
+      - id: fld_node_app
+        name: Node.app
+        fieldType: string
+        required: true
+      - id: fld_node_props
+        name: Node.props
+        fieldType: object
+        required: true
+        description: Type-specific data stored in FLEXIBLE object
+
+  - id: ent_edge
+    name: Edge
+    storageType: surrealdb
+    description: RELATION table connecting nodes with typed edges
+    stored_in: SurrealDB
+    fields:
+      - id: fld_edge_type
+        name: Edge.type
+        fieldType: enum
+        required: true
+        enumValues: [RENDERS, CHILD_OF, TRIGGERS, CALLS, REQUIRES_STATE, TRANSITIONS_TO, READS, WRITES, HAS_FIELD, REFERENCES, VALIDATES, CONSTRAINS, AUTHORIZES, BELONGS_TO, DEPENDS_ON, HOSTED_ON, STORED_IN, NAVIGATES_TO, DISPLAYS, ACCEPTS_INPUT, IMPLEMENTED_IN]
+      - id: fld_edge_in
+        name: Edge.in
+        fieldType: reference
+        required: true
+        description: Source node (RecordId)
+      - id: fld_edge_out
+        name: Edge.out
+        fieldType: reference
+        required: true
+        description: Target node (RecordId)

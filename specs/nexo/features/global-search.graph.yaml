@@ -1,0 +1,92 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_global_search
+  name: Global Search
+  featureId: "N7"
+  status: deployed
+  priority: P1
+  description: Global node search in toolbar with results dropdown, plus relocated sidebar-local filter
+  depends_on:
+    - Navigator
+
+components:
+  - id: cmp_global_search_input
+    name: Global Search Input
+    componentType: interactive
+    description: Toolbar search input that queries all node types in the active app scope
+    sourceFile: web-console/src/components/layout/Toolbar.tsx
+    testId: global-search-input
+    triggers:
+      - Search All Nodes
+
+  - id: cmp_search_results_dropdown
+    name: Search Results Dropdown
+    componentType: interactive
+    description: Overlay below toolbar input showing ranked results with type-colored dot and type label
+    sourceFile: web-console/src/components/layout/GlobalSearchDropdown.tsx
+    testId: global-search-dropdown
+    displays:
+      - Node.name
+      - Node.type
+    triggers:
+      - Navigate To Node
+
+  - id: cmp_sidebar_search_input
+    name: Sidebar Search Input
+    componentType: interactive
+    description: Filter input inside Navigator sidebar, scoped to the selected node type
+    sourceFile: web-console/src/components/sidebar/Navigator.tsx
+    testId: sidebar-search-input
+    triggers:
+      - Filter Sidebar
+
+actions:
+  - id: act_search_all_nodes
+    name: Search All Nodes
+    actionType: query
+    inputType: form
+    description: Typing in the global search input queries all node types via the search API without type filter
+    calls:
+      - "GET /nodes/search"
+
+  - id: act_navigate_to_node
+    name: Navigate To Node
+    actionType: navigate
+    inputType: tap
+    description: Selecting a result from the global search dropdown navigates to that node's detail view
+    navigates_to:
+      - Screen Detail
+      - Feature Detail
+
+  - id: act_filter_sidebar
+    name: Filter Sidebar
+    actionType: query
+    inputType: form
+    description: Typing in the sidebar search filters the current node list or screen tree by name
+
+edges:
+  # Global search dropdown renders inside Toolbar (cross-feature reference)
+  - from: Toolbar
+    to: Global Search Input
+    type: RENDERS
+
+  - from: Global Search Input
+    to: Search Results Dropdown
+    type: RENDERS
+
+  # Sidebar search renders inside Navigator Panel (cross-feature reference)
+  - from: Navigator Panel
+    to: Sidebar Search Input
+    type: RENDERS
+
+  # Sidebar filter drives the existing sidebar components (cross-feature reference)
+  - from: Sidebar Search Input
+    to: Node List
+    type: RENDERS
+
+  - from: Sidebar Search Input
+    to: Screen Tree
+    type: RENDERS

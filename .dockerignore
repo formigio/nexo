@@ -1,0 +1,10 @@
+node_modules
+surreal-data
+dist
+.git
+.claude
+local
+*.swp
+*.swo
+*~
+.DS_Store

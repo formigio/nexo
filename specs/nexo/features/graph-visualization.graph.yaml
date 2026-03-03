@@ -1,0 +1,73 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_graph_visualization
+  name: Graph Visualization
+  featureId: "N5"
+  status: deployed
+  priority: P1
+  description: D3 force-directed graph with context-aware scoping, filtering, and interaction
+
+screens:
+  - id: scr_graph_view
+    name: Graph View
+    route: /graph
+    accessLevel: public
+    description: Full-app or context-scoped force graph with type filters and context menu
+    renders:
+      - Graph Context Menu
+
+components:
+  - id: cmp_graph_context_menu
+    name: Graph Context Menu
+    componentType: interactive
+    description: Right-click menu on nodes with Drill Down, Go Back, Navigate, and Dismiss actions
+    triggers:
+      - Drill Down Node
+      - Navigate To Detail
+
+actions:
+  - id: act_drill_down_node
+    name: Drill Down Node
+    actionType: navigate
+    inputType: tap
+    description: Scope the graph to a node and its depth-2 neighborhood
+    calls:
+      - "GET /traverse/{id}"
+
+  - id: act_navigate_to_detail
+    name: Navigate To Detail
+    actionType: navigate
+    inputType: tap
+    description: Open the detail view for the selected node
+    navigates_to:
+      - Screen Detail
+      - Feature Detail
+
+  - id: act_filter_node_types
+    name: Filter Node Types
+    actionType: configure
+    inputType: tap
+    description: Toggle visibility of node types in the graph visualization
+
+  - id: act_load_full_graph
+    name: Load Full Graph
+    actionType: query
+    inputType: automatic
+    calls:
+      - GET /graph
+
+endpoints:
+  - id: api_get_graph
+    name: GET /graph
+    method: GET
+    path: /graph
+    authRequired: false
+    description: Fetch full app graph with all nodes and edges
+    reads:
+      - Node
+      - Edge
+
+edges: []

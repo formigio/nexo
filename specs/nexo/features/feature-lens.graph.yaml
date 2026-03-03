@@ -1,0 +1,91 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_feature_lens
+  name: Feature Lens
+  featureId: "N3"
+  status: deployed
+  priority: P0
+  description: Browse and inspect features with scope visualization and member breakdown
+
+screens:
+  - id: scr_feature_list
+    name: Feature List
+    route: /features
+    accessLevel: public
+    description: Card-based list of all features with status/priority filters and scope bars
+    renders:
+      - Feature List View
+      - Scope Overview
+
+  - id: scr_feature_detail
+    name: Feature Detail
+    route: "/features/:featureId"
+    accessLevel: public
+    description: Expanded view of a single feature with member nodes grouped by type
+    child_of:
+      - Feature List
+    renders:
+      - Feature Detail View
+      - Scope Overview
+
+components:
+  - id: cmp_feature_list_view
+    name: Feature List View
+    componentType: interactive
+    description: Card grid with status and priority filters, grouped by priority tier
+    triggers:
+      - Filter Features
+      - View Feature Detail
+
+  - id: cmp_feature_detail_view
+    name: Feature Detail View
+    componentType: interactive
+    description: Sections per node type showing members with connection hints and drill-in
+    triggers:
+      - Drill Into Node
+
+  - id: cmp_scope_overview
+    name: Scope Overview
+    componentType: presentational
+    description: Colored bar chart showing count of each node type in feature scope
+
+actions:
+  - id: act_filter_features
+    name: Filter Features
+    actionType: query
+    inputType: tap
+
+  - id: act_view_feature_detail
+    name: View Feature Detail
+    actionType: navigate
+    inputType: tap
+    navigates_to:
+      - Feature Detail
+    calls:
+      - "GET /features/{id}/scope"
+
+endpoints:
+  - id: api_get_features_summary
+    name: "GET /features/summary"
+    method: GET
+    path: "/features/summary"
+    authRequired: false
+    description: Fetch all features with scope counts per node type
+    reads:
+      - Node
+      - Edge
+
+  - id: api_get_features_id_scope
+    name: "GET /features/{id}/scope"
+    method: GET
+    path: "/features/{id}/scope"
+    authRequired: false
+    description: Fetch feature with all member nodes and connecting edges
+    reads:
+      - Node
+      - Edge
+
+edges: []

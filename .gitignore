@@ -1,0 +1,31 @@
+# Local working files (untracked)
+local/
+
+# OS files
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Warden env (local overrides)
+.env
+
+# SurrealDB local data (legacy — now uses Docker volume)
+surreal-data/
+
+# Node modules
+node_modules/
+
+# Claude Code
+.claude/
+
+# JetBrains
+.idea/
+
+# Project-local Nexo config (consuming projects should commit theirs)
+.nexo/
+
+# Build output
+dist/

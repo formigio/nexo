@@ -1,0 +1,68 @@
+{
+  "name": "@formigio/nexo",
+  "version": "1.0.0",
+  "description": "Specification graph system — make your entire app architecture queryable",
+  "license": "MIT",
+  "author": "Never Behind Group, LLC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/formigio/nexo.git"
+  },
+  "homepage": "https://github.com/formigio/nexo",
+  "bugs": {
+    "url": "https://github.com/formigio/nexo/issues"
+  },
+  "keywords": [
+    "specification-graph",
+    "architecture",
+    "surrealdb",
+    "mcp",
+    "developer-tools"
+  ],
+  "type": "module",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "bin": {
+    "nexo": "dist/cli/index.js",
+    "nexo-mcp": "dist/mcp-server/index.js"
+  },
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "build": "rm -rf dist && tsc && cp -r src/schema-sql dist/schema-sql && chmod +x dist/cli/index.js dist/mcp-server/index.js",
+    "dev": "tsc --watch",
+    "up": "npm run build && npm run web:build && warden env up",
+    "down": "warden env down",
+    "db:start": "warden env up -- surrealdb",
+    "restart:api": "warden env restart -- api",
+    "logs": "warden env logs -- -f",
+    "logs:api": "warden env logs -- -f api",
+    "seed:example": "npm run build && node dist/seed/example.js",
+    "seed:nexo": "npm run build && node dist/seed/nexo.js",
+    "web:install": "cd web-console && npm install",
+    "web:dev": "cd web-console && npm run dev",
+    "web:build": "cd web-console && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "js-yaml": "^4.1.1",
+    "surrealdb": "^2.0.0-beta.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "typescript": "^5.7.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

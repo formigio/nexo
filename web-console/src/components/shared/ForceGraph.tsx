@@ -1,0 +1,353 @@
+import {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from 'react'
+import * as d3 from 'd3'
+import type { Node, Edge, NodeType, EdgeType } from '@/lib/types'
+import {
+  NODE_TYPE_COLORS,
+  NODE_TYPE_LABELS,
+  NODE_TYPE_RADIUS,
+  EDGE_TYPE_COLORS,
+} from '@/lib/constants'
+
+export interface ForceGraphHandle {
+  fitView: () => void
+}
+
+interface ForceGraphProps {
+  nodes: Node[]
+  edges: Edge[]
+  highlightNodeId?: string
+  onNodeClick?: (node: Node, position: { x: number; y: number }) => void
+  activeTypes?: Set<NodeType>
+}
+
+interface D3Node extends d3.SimulationNodeDatum {
+  id: string
+  type: NodeType
+  name: string
+}
+
+interface D3Link extends d3.SimulationLinkDatum<D3Node> {
+  id: string
+  type: EdgeType
+}
+
+export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
+  function ForceGraph({ nodes, edges, highlightNodeId, onNodeClick, activeTypes }, ref) {
+    const svgRef = useRef<SVGSVGElement>(null)
+    const containerRef = useRef<HTMLDivElement>(null)
+    const simRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null)
+    const [selectedId, setSelectedId] = useState<string | null>(null)
+    const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+
+    const fitView = useCallback(() => {
+      const svg = svgRef.current
+      if (!svg) return
+      const g = svg.querySelector('g.graph-container')
+      if (!g) return
+      const bbox = (g as SVGGElement).getBBox()
+      if (!bbox.width || !bbox.height) return
+      const { width, height } = dimensions
+      const padding = 40
+      const scale = Math.min(
+        (width - padding * 2) / bbox.width,
+        (height - padding * 2) / bbox.height,
+        1.5,
+      )
+      const tx = (width - bbox.width * scale) / 2 - bbox.x * scale
+      const ty = (height - bbox.height * scale) / 2 - bbox.y * scale
+      d3.select(svg)
+        .transition()
+        .duration(700)
+        .call(
+          (d3.zoom() as d3.ZoomBehavior<SVGSVGElement, unknown>).transform as never,
+          d3.zoomIdentity.translate(tx, ty).scale(scale),
+        )
+    }, [dimensions])
+
+    useImperativeHandle(ref, () => ({ fitView }), [fitView])
+
+    // Observe container size
+    useEffect(() => {
+      const el = containerRef.current
+      if (!el) return
+      const ro = new ResizeObserver((entries) => {
+        const entry = entries[0]
+        if (entry) {
+          setDimensions({
+            width: entry.contentRect.width,
+            height: entry.contentRect.height,
+          })
+        }
+      })
+      ro.observe(el)
+      return () => ro.disconnect()
+    }, [])
+
+    // Main D3 effect
+    useEffect(() => {
+      const svg = d3.select(svgRef.current!)
+      const { width, height } = dimensions
+
+      svg.attr('width', width).attr('height', height)
+
+      // Filter nodes by activeTypes
+      const visibleNodes: D3Node[] = nodes
+        .filter((n) => !activeTypes || activeTypes.has(n.type))
+        .map((n) => ({ ...n }))
+      const visibleIds = new Set(visibleNodes.map((n) => n.id))
+
+      // Deep-copy edges and map in/out → source/target for D3
+      const visibleLinks: D3Link[] = edges
+        .filter((e) => visibleIds.has(e.in) && visibleIds.has(e.out))
+        .map((e) => ({
+          id: e.id,
+          type: e.type,
+          source: e.in,
+          target: e.out,
+        }))
+
+      // Clear previous
+      svg.selectAll('*').remove()
+
+      const container = svg.append('g').attr('class', 'graph-container')
+
+      // Zoom
+      const zoomBehavior = d3
+        .zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.05, 4])
+        .on('zoom', (e) => container.attr('transform', e.transform))
+      svg.call(zoomBehavior)
+      svg.on('dblclick.zoom', null)
+
+      // Click background to deselect
+      svg.on('click', () => setSelectedId(null))
+
+      // Links
+      const linkSel = container
+        .append('g')
+        .selectAll<SVGLineElement, D3Link>('line')
+        .data(visibleLinks)
+        .enter()
+        .append('line')
+        .attr('stroke', (d) => EDGE_TYPE_COLORS[d.type] || '#444')
+        .attr('stroke-width', 1)
+        .attr('stroke-opacity', 0.35)
+
+      // Nodes
+      const nodeSel = container
+        .append('g')
+        .selectAll<SVGGElement, D3Node>('.node')
+        .data(visibleNodes)
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .style('cursor', 'pointer')
+        .on('click', (event, d) => {
+          event.stopPropagation()
+          setSelectedId(d.id)
+          const original = nodes.find((n) => n.id === d.id)
+          if (original && onNodeClick) onNodeClick(original, { x: event.clientX, y: event.clientY })
+        })
+        .call(
+          d3
+            .drag<SVGGElement, D3Node>()
+            .on('start', (event, d) => {
+              if (!event.active) sim.alphaTarget(0.3).restart()
+              d.fx = d.x
+              d.fy = d.y
+            })
+            .on('drag', (event, d) => {
+              d.fx = event.x
+              d.fy = event.y
+            })
+            .on('end', (event, d) => {
+              if (!event.active) sim.alphaTarget(0)
+              d.fx = null
+              d.fy = null
+            }),
+        )
+
+      // Highlight ring for highlightNodeId
+      nodeSel
+        .filter((d) => d.id === highlightNodeId)
+        .append('circle')
+        .attr('r', (d) => (NODE_TYPE_RADIUS[d.type] || 6) + 5)
+        .attr('fill', 'none')
+        .attr('stroke', (d) => NODE_TYPE_COLORS[d.type] || '#888')
+        .attr('stroke-width', 2)
+        .attr('class', 'pulse-ring')
+
+      nodeSel
+        .append('circle')
+        .attr('r', (d) => NODE_TYPE_RADIUS[d.type] || 6)
+        .attr('fill', (d) => NODE_TYPE_COLORS[d.type] || '#888')
+        .attr('stroke', (d) =>
+          d3.color(NODE_TYPE_COLORS[d.type] || '#888')!.darker(0.5).formatHex(),
+        )
+        .attr('stroke-width', 1.5)
+
+      nodeSel
+        .append('text')
+        .attr('dy', (d) => (NODE_TYPE_RADIUS[d.type] || 6) + 11)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#8b949e')
+        .attr('font-size', '9px')
+        .attr('pointer-events', 'none')
+        .text((d) => (d.name.length > 22 ? d.name.slice(0, 20) + '\u2026' : d.name))
+
+      // Pre-spread nodes
+      visibleNodes.forEach((n) => {
+        if (n.x == null || n.x === 0) {
+          n.x = (Math.random() - 0.5) * width * 0.7 + width / 2
+          n.y = (Math.random() - 0.5) * height * 0.7 + height / 2
+        }
+      })
+
+      // Simulation
+      const sim = d3
+        .forceSimulation<D3Node>(visibleNodes)
+        .force(
+          'link',
+          d3
+            .forceLink<D3Node, D3Link>(visibleLinks)
+            .id((d) => d.id)
+            .distance(80)
+            .strength(0.3),
+        )
+        .force('charge', d3.forceManyBody().strength(-150).distanceMax(400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force(
+          'collision',
+          d3.forceCollide<D3Node>().radius((d) => (NODE_TYPE_RADIUS[d.type] || 6) + 8),
+        )
+        .alphaDecay(0.015)
+
+      simRef.current = sim
+
+      sim.on('tick', () => {
+        linkSel
+          .attr('x1', (d) => (d.source as D3Node).x!)
+          .attr('y1', (d) => (d.source as D3Node).y!)
+          .attr('x2', (d) => (d.target as D3Node).x!)
+          .attr('y2', (d) => (d.target as D3Node).y!)
+        nodeSel.attr('transform', (d) => `translate(${d.x},${d.y})`)
+      })
+
+      sim.on('end', () => {
+        // Auto fit when simulation settles
+        const g = svgRef.current?.querySelector('g.graph-container')
+        if (!g) return
+        const bbox = (g as SVGGElement).getBBox()
+        if (!bbox.width || !bbox.height) return
+        const padding = 40
+        const scale = Math.min(
+          (width - padding * 2) / bbox.width,
+          (height - padding * 2) / bbox.height,
+          1.5,
+        )
+        const tx = (width - bbox.width * scale) / 2 - bbox.x * scale
+        const ty = (height - bbox.height * scale) / 2 - bbox.y * scale
+        svg
+          .transition()
+          .duration(700)
+          .call(
+            zoomBehavior.transform,
+            d3.zoomIdentity.translate(tx, ty).scale(scale),
+          )
+      })
+
+      return () => {
+        sim.stop()
+      }
+    }, [nodes, edges, activeTypes, highlightNodeId, onNodeClick, dimensions])
+
+    // Apply highlight/dim classes based on selection
+    useEffect(() => {
+      const svg = d3.select(svgRef.current!)
+      const active = selectedId || highlightNodeId
+
+      if (!active) {
+        svg.selectAll('.node').style('opacity', null)
+        svg.selectAll('.node text').style('fill', '#8b949e')
+        svg.selectAll('line').style('stroke-opacity', 0.35)
+        return
+      }
+
+      // Build neighbor set
+      const neighbors = new Set<string>([active])
+      const highlightEdges = new Set<string>()
+      edges.forEach((e) => {
+        if (e.in === active || e.out === active) {
+          neighbors.add(e.in)
+          neighbors.add(e.out)
+          highlightEdges.add(e.id)
+        }
+      })
+
+      svg.selectAll<SVGGElement, D3Node>('.node').style('opacity', (d) =>
+        neighbors.has(d.id) ? 1 : 0.15,
+      )
+      svg
+        .selectAll<SVGTextElement, D3Node>('.node text')
+        .style('fill', (d) => (neighbors.has(d.id) ? '#e1e4e8' : '#8b949e'))
+      svg.selectAll<SVGLineElement, D3Link>('line').style('stroke-opacity', (d) =>
+        highlightEdges.has(d.id) ? 0.9 : 0.05,
+      )
+    }, [selectedId, highlightNodeId, edges])
+
+    // Count visible types for legend
+    const typeCounts = new Map<NodeType, number>()
+    nodes.forEach((n) => {
+      if (!activeTypes || activeTypes.has(n.type)) {
+        typeCounts.set(n.type, (typeCounts.get(n.type) || 0) + 1)
+      }
+    })
+    const visibleNodeCount = activeTypes
+      ? nodes.filter((n) => activeTypes.has(n.type)).length
+      : nodes.length
+    const visibleIds = new Set(
+      activeTypes ? nodes.filter((n) => activeTypes.has(n.type)).map((n) => n.id) : nodes.map((n) => n.id),
+    )
+    const visibleEdgeCount = edges.filter(
+      (e) => visibleIds.has(e.in) && visibleIds.has(e.out),
+    ).length
+
+    return (
+      <div ref={containerRef} className="relative w-full h-full">
+        <svg ref={svgRef} className="w-full h-full" />
+
+        {/* Stats overlay */}
+        <div className="absolute top-3 right-3 text-[11px] text-text-dim">
+          {visibleNodeCount} nodes &middot; {visibleEdgeCount} edges
+        </div>
+
+        {/* Legend overlay */}
+        <div className="absolute bottom-3 left-3 bg-surface-1/80 backdrop-blur-sm border border-border-default rounded-lg px-3 py-2 text-[11px]">
+          <div className="font-semibold text-text-dim uppercase tracking-wide text-[10px] mb-1.5">
+            Node Types
+          </div>
+          {Array.from(typeCounts.entries())
+            .sort(([, a], [, b]) => b - a)
+            .map(([type, count]) => (
+              <div key={type} className="flex items-center gap-1.5 mb-0.5">
+                <div
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: NODE_TYPE_COLORS[type] }}
+                />
+                <span className="text-text-secondary">
+                  {NODE_TYPE_LABELS[type]} ({count})
+                </span>
+              </div>
+            ))}
+        </div>
+      </div>
+    )
+  },
+)
