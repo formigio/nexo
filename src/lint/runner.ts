@@ -4,6 +4,7 @@ import { listEdges } from "../db/edges.js";
 import type { Node, Edge } from "../schema/types.js";
 import type { LintContext, LintRule, LintReport, Severity, Category } from "./types.js";
 import { ALL_RULES } from "./rules.js";
+import { loadCustomRules } from "./customRules.js";
 
 function buildContext(nodes: Node[], edges: Edge[]): LintContext {
   const nodeById = new Map<string, Node>();
@@ -42,6 +43,7 @@ export interface RunLintOptions {
   rules?: string[];
   severity?: Severity;
   category?: Category;
+  skipCustomRules?: boolean;
 }
 
 export async function runLint(db: Surreal, opts: RunLintOptions): Promise<LintReport> {
@@ -49,7 +51,8 @@ export async function runLint(db: Surreal, opts: RunLintOptions): Promise<LintRe
   const edges = await listEdges(db);
   const ctx = buildContext(nodes, edges);
 
-  let rules: LintRule[] = ALL_RULES;
+  const customRules = opts.skipCustomRules ? [] : await loadCustomRules();
+  let rules: LintRule[] = [...ALL_RULES, ...customRules];
 
   if (opts.rules && opts.rules.length > 0) {
     const ruleSet = new Set(opts.rules);

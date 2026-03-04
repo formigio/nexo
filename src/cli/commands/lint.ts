@@ -18,6 +18,7 @@ export const lintCommand = new Command("lint")
   .option("--rule <ids...>", "Run only specific rules (repeatable)")
   .option("--severity <level>", "Minimum severity: error, warning, info", "info")
   .option("--category <cat>", "Filter by category: connectivity, completeness, consistency")
+  .option("--no-custom", "Skip project-specific custom rules from .nexo/rules/")
   .option("--verbose", "Show passing rules too", false)
   .option("--json", "Output as JSON", false)
   .action(async (opts) => {
@@ -31,6 +32,7 @@ export const lintCommand = new Command("lint")
         rules: opts.rule,
         severity: opts.severity as Severity,
         category: opts.category as Category | undefined,
+        skipCustomRules: !opts.custom,
       });
 
       if (opts.json) {

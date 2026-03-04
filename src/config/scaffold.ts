@@ -1,6 +1,47 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+const EXAMPLE_RULE = `// Example custom lint rule for Nexo.
+// Rename this file (remove the _ prefix) to activate it.
+// Files starting with _ are ignored by the rule loader.
+//
+// Each file must \`export default\` a LintRule object (or an array of them).
+// A LintRule has: id, severity, category, description, check(ctx).
+//
+// The check function receives a LintContext with:
+//   nodes, edges, nodeById, nodesByType, edgesFrom, edgesTo
+//
+// Example: flag Components that have no incoming or outgoing edges
+// besides their RENDERS edge from a Screen.
+
+export default {
+  id: "no-lonely-components",
+  severity: "info",
+  category: "completeness",
+  description: "Components with only a RENDERS edge and nothing else",
+  check(ctx) {
+    const violations = [];
+    const components = ctx.nodesByType.get("Component") ?? [];
+    for (const cmp of components) {
+      const inEdges = ctx.edgesTo.get(cmp.id) ?? [];
+      const outEdges = ctx.edgesFrom.get(cmp.id) ?? [];
+      const totalEdges = inEdges.length + outEdges.length;
+      // If the only edge is the RENDERS from a Screen, flag it
+      if (totalEdges === 1 && inEdges.length === 1 && inEdges[0].type === "RENDERS") {
+        violations.push({
+          nodeId: cmp.id,
+          nodeName: cmp.name,
+          nodeType: cmp.type,
+          message: \`Component "\${cmp.name}" only has a RENDERS edge — consider adding TRIGGERS, CALLS, or BELONGS_TO edges\`,
+          fix: "Add edges to describe this component's behavior and feature ownership",
+        });
+      }
+    }
+    return violations;
+  },
+};
+`;
+
 const STARTER_CONFIG = `{
   "app": "",
   "db": {
@@ -38,5 +79,16 @@ export function scaffoldConfig(cwd: string = process.cwd()): string | null {
   }
 
   writeFileSync(configPath, STARTER_CONFIG, "utf-8");
+
+  // Create rules directory with example file
+  const rulesDir = resolve(dir, "rules");
+  if (!existsSync(rulesDir)) {
+    mkdirSync(rulesDir, { recursive: true });
+  }
+  const examplePath = resolve(rulesDir, "_example.js");
+  if (!existsSync(examplePath)) {
+    writeFileSync(examplePath, EXAMPLE_RULE, "utf-8");
+  }
+
   return configPath;
 }
