@@ -9,12 +9,17 @@ export const NexoConfigSchema = z.object({
       database: z.string().optional(),
       username: z.string().optional(),
       password: z.string().optional(),
+      caFile: z.string().optional(),
     })
     .optional(),
   ingest: z
     .object({
       frontend: z.string().optional(),
       backend: z.string().optional(),
+      samTemplate: z.string().optional(),
+      appEntry: z.string().optional(),
+      handlerSourceRoots: z.array(z.string()).optional(),
+      skipDirs: z.array(z.string()).optional(),
     })
     .optional(),
   web: z
@@ -38,5 +43,24 @@ export const DEFAULTS = {
   web: {
     port: 3000,
     host: "127.0.0.1",
+  },
+  ingest: {
+    samTemplateCandidates: [
+      "unified-stack/template.yaml",
+      "template.yaml",
+      "infra/web.yaml",
+    ],
+    appEntryCandidates: [
+      "src/App.tsx",
+      "src/App.jsx",
+    ],
+    handlerSourceRoots: [
+      "unified-stack/src",
+      "src",
+    ],
+    builtinSkipDirs: [
+      "node_modules", "dist", ".git", ".cache", "build", "coverage",
+      "__tests__", "__mocks__", "test", "tests", ".aws-sam",
+    ],
   },
 } as const;
