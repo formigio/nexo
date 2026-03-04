@@ -13,68 +13,90 @@ Its purpose: make an entire application definition queryable so developers, PMs,
 ```bash
 npm run build          # TypeScript → dist/ (also copies src/schema-sql/ to dist/)
 npm run dev            # tsc --watch
-npm run up             # Build all + start Docker services (SurrealDB + API + Console)
-npm run down           # Stop all Docker services
+npm run up             # Alias for docker:up (default)
+npm run docker:up      # Build all + docker compose up -d (SurrealDB + API + Console)
+npm run docker:down    # docker compose down
 npm run seed:example   # Build + seed an example todo app graph
 npm run web:dev        # Vite dev server at localhost:5173 (for active console development)
 ```
+
+> **Warden users:** Use `npm run warden:up` / `warden:down` instead of the `docker:*` scripts.
 
 After building, the CLI is available as `node dist/cli/index.js` (or `nexo` if npm-linked).
 
 **No test suite exists yet.** No linter is configured.
 
-## Local Dev Environment (Warden + Docker)
+## Local Dev Environment
 
-The dev stack runs on [Warden](https://warden.dev/) (v0.15.0), which provides Traefik reverse proxy, dnsmasq for `.test` domains, and Docker Compose orchestration.
+The full stack (SurrealDB + API + web console) can run via **Docker Compose** or **Warden**. All npm scripts are namespaced by environment.
 
-### Services
+### Option A: Docker Compose (recommended for most users)
 
-| Service | Image | URL | Purpose |
-|---------|-------|-----|---------|
-| SurrealDB | `surrealdb/surrealdb:v3` | `https://db.nexo.test` | Graph database |
-| API | `node:22-slim` | `https://app.nexo.test` | Nexo web server (JSON API) |
-| Console | `nginx:alpine` | `https://nexo.test` | Web console (production build) |
+```bash
+npm run docker:up          # Build all + docker compose up -d
+npm run docker:down        # docker compose down
+```
 
-### Setup (one-time)
+Services start at: SurrealDB `localhost:8000`, API `localhost:3001`, Console `localhost:8080`.
+
+```bash
+npm run docker:db:start    # Start just SurrealDB
+npm run docker:restart:api # Restart API after rebuild
+npm run docker:logs        # Tail all container logs
+npm run docker:logs:api    # Tail API logs only
+```
+
+The CLI defaults to `http://localhost:8000` — no extra config needed.
+
+### Option B: Warden (macOS, TLS + .test domains)
+
+[Warden](https://warden.dev/) (v0.15.0) provides Traefik reverse proxy, dnsmasq for `.test` domains, and automatic TLS.
+
+**One-time setup:**
 
 1. Install Warden: `brew install wardenenv/warden/warden`
 2. Start global services: `warden svc up`
 3. Sign TLS certificate: `warden sign-certificate nexo.test`
-4. Start environment: `warden env up`
+4. Start environment: `npm run warden:up`
 5. Init + seed: `nexo init && npm run seed:example`
 
-### Daily workflow
+**Daily workflow:**
 
 ```bash
-warden env up          # Start SurrealDB + API + Console (or: npm run up)
-                       # Then browse https://nexo.test
-warden env down        # Stop everything (or: npm run down)
+npm run warden:up          # Build all + warden env up
+npm run warden:down        # warden env down
 ```
 
-For active web console development, use `npm run web:dev` instead (Vite HMR at `localhost:5173`).
-
-### Additional scripts
+| Service | URL | Purpose |
+|---------|-----|---------|
+| SurrealDB | `https://db.nexo.test` | Graph database |
+| API | `https://app.nexo.test` | Nexo web server (JSON API) |
+| Console | `https://nexo.test` | Web console (production build) |
 
 ```bash
-npm run db:start       # Start just SurrealDB
-npm run restart:api    # Restart API after rebuild
-npm run logs           # Tail all container logs
-npm run logs:api       # Tail API logs only
+npm run warden:db:start    # Start just SurrealDB
+npm run warden:restart:api # Restart API after rebuild
+npm run warden:logs        # Tail all container logs
+npm run warden:logs:api    # Tail API logs only
+```
+
+Set your DB URL for the CLI:
+```bash
+export NEXO_DB_URL=https://db.nexo.test
 ```
 
 ### How it works
 
-- **No host port bindings** — Traefik routes `*.nexo.test` to the correct container via labels
-- **TLS everywhere** — Warden CA is trusted in macOS System keychain; Node.js and browsers work natively
 - **Data persists** in Docker named volume `nexo_surrealdata`
-- **Host CLI tools** (`nexo init`, `nexo seed`, etc.) connect to SurrealDB via `https://db.nexo.test`
 - **API container** connects internally via `http://surrealdb:8000` (Docker network)
-- **Console container** serves the built SPA via nginx at `https://nexo.test`, proxying `/api` to the API service
-- **Vite dev mode** (optional) proxies `/api` to `https://app.nexo.test` using Warden CA cert
+- **Console container** serves the built SPA via nginx, proxying `/api` to the API service
+- **Vite dev mode** (optional, `npm run web:dev`) proxies `/api` to the API service
+- **Warden only:** No host port bindings — Traefik routes `*.nexo.test` via labels. TLS CA is trusted in macOS System keychain.
 
 ### Configuration files
 
-- `.env` — Warden environment config (gitignored, local overrides)
+- `docker-compose.yml` — Docker Compose services (standalone mode)
+- `.env` — Environment config (gitignored, local overrides)
 - `.warden/warden-env.yml` — Docker Compose services for Warden
 - `.warden/nginx/default.conf` — nginx config for console (SPA fallback + API proxy)
 
@@ -82,7 +104,7 @@ npm run logs:api       # Tail API logs only
 
 - **Node >= 20**, ESM (`"type": "module"` in package.json)
 - **TypeScript** targeting ES2022, `NodeNext` module resolution
-- **SurrealDB v3** running in Docker via Warden (accessible at `https://db.nexo.test`)
+- **SurrealDB v3** running in Docker (Docker Compose: `localhost:8000`, Warden: `https://db.nexo.test`)
 
 Environment variables for DB config (all have defaults):
 `NEXO_DB_URL`, `NEXO_DB_NS`, `NEXO_DB_DB`, `NEXO_DB_USER`, `NEXO_DB_PASS`

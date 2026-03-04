@@ -47,6 +47,8 @@ cp .env.example .env
 #### Option B: Docker Compose
 
 ```bash
+npm run docker:up       # Builds TypeScript + web console, then starts all services
+# Or without rebuilding:
 docker compose up -d
 ```
 
@@ -56,6 +58,15 @@ This starts three services:
 - **Web console** at `http://localhost:8080`
 
 The CLI defaults to `http://localhost:8000` — no extra config needed.
+
+Additional `docker:*` scripts:
+```bash
+npm run docker:down        # Stop all services
+npm run docker:db:start    # Start just SurrealDB
+npm run docker:restart:api # Restart API after rebuild
+npm run docker:logs        # Tail all container logs
+npm run docker:logs:api    # Tail API logs only
+```
 
 #### Option C: Warden (macOS, TLS + .test domains)
 
@@ -68,6 +79,8 @@ warden svc up
 warden sign-certificate nexo.test
 
 # Start environment
+npm run warden:up        # Builds + starts via Warden
+# Or without rebuilding:
 warden env up
 ```
 
@@ -79,6 +92,15 @@ nexo init --config
 
 # Option 2: environment variable
 export NEXO_DB_URL=https://db.nexo.test
+```
+
+Additional `warden:*` scripts:
+```bash
+npm run warden:down        # Stop all services
+npm run warden:db:start    # Start just SurrealDB
+npm run warden:restart:api # Restart API after rebuild
+npm run warden:logs        # Tail all container logs
+npm run warden:logs:api    # Tail API logs only
 ```
 
 ### 3. Build and initialize
@@ -93,7 +115,7 @@ npm run seed:example       # Seed the todo app example graph
 
 ```bash
 nexo app overview --app todo    # Should show ~55 nodes, ~120 edges
-nexo web --app todo             # Open http://localhost:3000
+nexo web --app todo             # Starts the JSON API server at http://localhost:3000
 ```
 
 ### 5. Project config (optional)
@@ -117,9 +139,15 @@ Precedence: CLI flags > environment variables > `.nexo/config.json` > defaults.
 ## Daily workflow
 
 ```bash
+npm run docker:up          # Build all + start Docker services
+npm run docker:down        # Stop Docker services
+# Or for Warden: npm run warden:up / warden:down
 npm run dev                # tsc --watch (rebuild on changes)
-npm run web:dev            # Vite dev server at localhost:5173 (web console HMR)
+nexo web --app todo        # JSON API server at localhost:3000
+npm run web:dev            # Vite dev server at localhost:5173 (full web console with HMR)
 ```
+
+> **Note:** `nexo web` serves the JSON API only. For the full web console UI (D3 graph visualization), use `npm run web:dev` (Vite) or `npm run docker:up` (serves the built console at `localhost:8080`).
 
 ## Project structure
 

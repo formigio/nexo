@@ -20,12 +20,18 @@ Nexo makes that knowledge explicit and queryable:
 
 ## Quickstart
 
-### Prerequisites
+There are two ways to use Nexo depending on what you need:
 
-- Node.js >= 20
-- SurrealDB v3 ([install guide](https://surrealdb.com/install))
+| | **Full Stack (recommended)** | **CLI + MCP Only** |
+|---|---|---|
+| Install | Clone repo | `npm install -g @formigio/nexo` |
+| What you get | CLI, MCP server, web console, HTTP API | CLI and MCP server only |
+| SurrealDB | Managed via Docker Compose or Warden | You provide a running instance |
+| Best for | Full local development | Connecting to an existing Nexo database |
 
-### Install and run
+### Path A: Full Stack (clone repo)
+
+This gives you everything — CLI, web console, HTTP API, and managed SurrealDB.
 
 ```bash
 # Clone and install
@@ -36,23 +42,50 @@ npm install
 # Start SurrealDB (pick one)
 surreal start --user root --pass root file:nexo.db   # Direct install
 # OR
-docker compose up -d                                   # Docker Compose (SurrealDB + API + Console)
+npm run docker:up                                      # Docker Compose (builds + starts everything)
 # OR
-warden env up                                          # Warden (macOS, TLS + .test domains)
+npm run warden:up                                      # Warden (macOS, TLS + .test domains)
 
 # Initialize and seed
 npm run build
 nexo init
 npm run seed:example    # Seeds a todo app with ~55 nodes and ~120 edges
 
-# Explore
+# Explore from the CLI
 nexo app overview --app todo
 nexo traverse scr_todo_list --depth 2
 nexo impact fld_todo_completed --hops 3
 
-# Start the web console
-nexo web --app todo
-# Open http://localhost:3000
+# Start the web console (Docker Compose serves it at localhost:8080 automatically)
+npm run web:dev         # Vite dev server at localhost:5173
+```
+
+> **Note:** `nexo web` starts the JSON API server (default port 3000), not the web console UI. The full web console is a separate React SPA in `web-console/` — served automatically by Docker Compose at `localhost:8080`, or run `npm run web:dev` for Vite HMR during development.
+
+### Path B: CLI + MCP Only (npm install)
+
+The npm package (`@formigio/nexo`) is a **thin client** — it provides the `nexo` CLI and `nexo-mcp` MCP server, both of which connect to an existing SurrealDB instance over the network. It does **not** include:
+
+- The web console UI (D3 graph visualization)
+- The HTTP API server (`nexo web`)
+- Docker Compose / Warden infrastructure for running SurrealDB
+
+To get those, clone the full repo (Path A above).
+
+```bash
+npm install -g @formigio/nexo
+
+# Point at a running SurrealDB instance
+export NEXO_DB_URL=http://localhost:8000
+
+# Or use a .nexo/config.json in your project
+nexo init --config
+# Then edit .nexo/config.json: { "db": { "url": "http://your-surreal-host:8000" } }
+
+# Initialize and explore
+nexo init
+nexo app overview --app todo
+nexo impact fld_todo_completed --hops 3
 ```
 
 ### Environment variables
@@ -80,7 +113,7 @@ nexo feature list|scope      Feature queries
 nexo ingest                  Parse source code and sync nodes (--app, --frontend, --backend, --apply)
 nexo coverage                Spec-to-source coverage report (--app)
 nexo lint                    Graph hygiene rules (--app, --rule, --severity)
-nexo web                     Start web console (--port, --host, --app)
+nexo web                     Start JSON API server (--port, --host, --app)
 ```
 
 ## Project Config
@@ -104,7 +137,9 @@ All fields are optional. Precedence: CLI flags > environment variables > `.nexo/
 
 ## HTTP API
 
-The `nexo web` server exposes a read-only JSON API for querying the graph. See [docs/api.md](docs/api.md) for the full endpoint reference.
+The `nexo web` command starts a lightweight HTTP server that exposes a read-only JSON API for querying the graph. This is the **API server only** — it does not serve the web console UI.
+
+To get the full web console, use Docker Compose (`localhost:8080`) or run `npm run web:dev` (`localhost:5173`) from the cloned repo. See [docs/api.md](docs/api.md) for the full endpoint reference.
 
 ## MCP Server
 
@@ -123,6 +158,12 @@ Nexo includes an MCP server for AI agent integration:
 
 Tools exposed: `get_node`, `list_nodes`, `create_node`, `update_node`, `delete_node`, `list_edges`, `create_edge`, `delete_edge`, `app_list`, `app_overview`, `feature_list`, `feature_scope`, `traverse`, `impact_analysis`.
 
+## Deployment
+
+- **Local server** is the currently supported model — run SurrealDB and the Nexo stack on your own machine or infrastructure.
+- **npm CLI as thin client** — `@formigio/nexo` installed via npm works as a CLI/MCP client against any reachable SurrealDB instance. No local Docker required.
+- **Hosted Nexo backend** — a managed cloud service is on the roadmap but not yet available.
+
 ## Architecture
 
 Nexo uses **SurrealDB v3** as a unified store for graph traversal, document storage, and relational filtering in a single query engine.
@@ -135,7 +176,8 @@ src/db/             SurrealDB operations (CRUD, traversal, migrations)
 src/cli/            Commander-based CLI
 src/ingest/         Source code parsers (React Router, AWS SAM)
 src/mcp-server/     MCP server (stdio transport)
-src/web/            HTTP server + web console
+src/web/            HTTP API server (JSON endpoints)
+web-console/        React + Vite + D3 web console (separate SPA)
 ```
 
 See [docs/architecture.md](docs/architecture.md) for full details, [docs/schema.md](docs/schema.md) for the complete type system.
@@ -147,8 +189,8 @@ Nexo supports three ways to run SurrealDB:
 | Method | Best for | Command | Ports |
 |--------|----------|---------|-------|
 | **Direct install** | Simplest setup | `surreal start --user root --pass root file:nexo.db` | DB: 8000 |
-| **Docker Compose** | Consistent environments | `docker compose up -d` | DB: 8000, API: 3001, Console: 8080 |
-| **Warden** | macOS power users | `warden env up` | TLS via `*.nexo.test` domains |
+| **Docker Compose** | Consistent environments | `npm run docker:up` (or `docker compose up -d`) | DB: 8000, API: 3001, Console: 8080 |
+| **Warden** | macOS power users | `npm run warden:up` (or `warden env up`) | TLS via `*.nexo.test` domains |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed setup instructions for each method.
 
