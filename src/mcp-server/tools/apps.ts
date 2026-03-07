@@ -1,31 +1,27 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Surreal } from "surrealdb";
+import type { GraphClient } from "../../client/types.js";
 import { z } from "zod";
-import { listNodes } from "../../db/nodes.js";
-import { listEdges } from "../../db/edges.js";
 import type { Node } from "../../schema/types.js";
 
 function nodeLabel(node: Node): string {
   return `${node.type}:${node.name} [${node.id}]`;
 }
 
-export function registerAppTools(server: McpServer, db: Surreal): void {
+export function registerAppTools(server: McpServer, client: GraphClient): void {
   server.tool(
     "app_list",
     "List all applications in the spec graph with node counts.",
     {},
     async () => {
       try {
-        const [result] = await db.query<[{ app: string; count: number }[]]>(
-          `SELECT app, count() AS count FROM node GROUP BY app ORDER BY app`
-        );
+        const apps = await client.listApps();
 
-        if (!result || result.length === 0) {
+        if (apps.length === 0) {
           return { content: [{ type: "text", text: "No applications found." }] };
         }
 
         const lines: string[] = ["Applications:"];
-        for (const row of result) {
+        for (const row of apps) {
           lines.push(`  ${row.app} (${row.count} nodes)`);
         }
         return { content: [{ type: "text", text: lines.join("\n") }] };
@@ -41,8 +37,7 @@ export function registerAppTools(server: McpServer, db: Surreal): void {
     { app: z.string().describe("App name (e.g. myapp)") },
     async ({ app }) => {
       try {
-        const nodes = await listNodes(db, { app });
-        const edges = await listEdges(db);
+        const { nodes, edges } = await client.appOverview(app);
 
         if (nodes.length === 0) {
           return { content: [{ type: "text", text: `No nodes found for app: ${app}` }], isError: true };
@@ -62,17 +57,12 @@ export function registerAppTools(server: McpServer, db: Surreal): void {
         }
 
         // Edge counts connected to this app's nodes
-        const nodeIds = new Set(nodes.map((n) => n.id));
-        const appEdges = edges.filter(
-          (e) => nodeIds.has(e.in) || nodeIds.has(e.out)
-        );
-
         const edgeTypeCounts = new Map<string, number>();
-        for (const edge of appEdges) {
+        for (const edge of edges) {
           edgeTypeCounts.set(edge.type, (edgeTypeCounts.get(edge.type) ?? 0) + 1);
         }
 
-        if (appEdges.length > 0) {
+        if (edges.length > 0) {
           lines.push("\nEdge counts by type:");
           for (const [type, count] of [...edgeTypeCounts.entries()].sort()) {
             lines.push(`  ${type.padEnd(15)} ${count}`);
@@ -92,7 +82,7 @@ export function registerAppTools(server: McpServer, db: Surreal): void {
           }
         }
 
-        lines.push(`\nTotal: ${nodes.length} nodes, ${appEdges.length} edges`);
+        lines.push(`\nTotal: ${nodes.length} nodes, ${edges.length} edges`);
         return { content: [{ type: "text", text: lines.join("\n") }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
@@ -109,7 +99,7 @@ export function registerAppTools(server: McpServer, db: Surreal): void {
     },
     async ({ app, status }) => {
       try {
-        const nodes = await listNodes(db, { app, type: "Feature" });
+        const nodes = await client.listNodes({ app, type: "Feature" });
 
         let features = nodes;
         if (status) {
@@ -145,16 +135,17 @@ export function registerAppTools(server: McpServer, db: Surreal): void {
     { id: z.string().describe("Feature node ID (e.g. ftr_transportation)") },
     async ({ id }) => {
       try {
-        // Get the feature node
-        const allNodes = await listNodes(db);
-        const feature = allNodes.find((n) => n.id === id);
+        const feature = await client.getNode(id);
         if (!feature || feature.type !== "Feature") {
           return { content: [{ type: "text", text: `Feature not found: ${id}` }], isError: true };
         }
 
         // Find all BELONGS_TO edges pointing to this feature
-        const edges = await listEdges(db, { type: "BELONGS_TO", to: id });
+        const edges = await client.listEdges({ type: "BELONGS_TO", to: id });
         const memberIds = new Set(edges.map((e) => e.in));
+
+        // Fetch member nodes
+        const allNodes = await client.listNodes({ app: feature.app });
         const memberNodes = allNodes.filter((n) => memberIds.has(n.id));
 
         const props = feature.props as Record<string, unknown>;

@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
-import { impactAnalysis } from "../../db/queries.js";
+import { getClient } from "../../client/factory.js";
 import { heading, error, info, nodeLabel, edgeLabel } from "../output.js";
 import chalk from "chalk";
 
@@ -9,9 +8,9 @@ export const impactCommand = new Command("impact")
   .argument("<id>", "Node ID to analyze")
   .option("-h, --hops <n>", "Maximum traversal hops", "3")
   .action(async (id, opts) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
-      const result = await impactAnalysis(db, id, parseInt(opts.hops, 10));
+      const result = await client.impactAnalysis(id, parseInt(opts.hops, 10));
 
       heading(`Impact Analysis: ${result.startNode.type}: ${result.startNode.name}`);
 
@@ -47,11 +46,10 @@ export const impactCommand = new Command("impact")
           `${result.structuralImpacts.length} structural`
         )
       );
-
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

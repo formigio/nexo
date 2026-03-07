@@ -1,0 +1,625 @@
+# ============================================================================
+# Nexo AWS Self-Hosting — Example SAM Template
+# ============================================================================
+#
+# This is a reference template for deploying Nexo to AWS. It creates:
+#
+#   Browser → CloudFront (your-domain.example.com)
+#               ├── /api/* → API Gateway → Lambda → SurrealDB (EC2)
+#               └── /*     → S3 (web console SPA)
+#
+# Auth:
+#   Web console: Cognito JWT (Authorization: Bearer <token>)
+#   CLI/MCP:     API key (x-api-key header) + IP allowlist
+#
+# Prerequisites:
+#   1. AWS SAM CLI installed (`brew install aws-sam-cli`)
+#   2. esbuild on PATH (`npm install -g esbuild`)
+#   3. SSM parameters created:
+#      - /nexo/api-key  (SecureString) — your API key for CLI/MCP access
+#      - /nexo/db-pass  (SecureString) — SurrealDB root password
+#   4. Route 53 hosted zone for your domain
+#
+# Deploy:
+#   cd infra
+#   sam build
+#   sam deploy --guided     # first time (creates samconfig.toml)
+#   sam deploy              # subsequent deploys
+#
+# After deploy:
+#   1. Deploy console SPA to S3:
+#      cd web-console && npm run build
+#      aws s3 sync dist/ s3://<ConsoleBucketName> --delete
+#      aws cloudfront create-invalidation --distribution-id <DistId> --paths "/*"
+#   2. Configure CLI:
+#      export NEXO_API_URL=https://your-domain.example.com
+#      export NEXO_API_KEY=<your-api-key>
+#      nexo init
+#
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Nexo Serverless Stack — API Gateway + Lambda for API,
+  EC2 (ASG of 1) for SurrealDB with automatic scale-down on idle.
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures:
+      - arm64
+    Timeout: 30
+
+Parameters:
+  SurrealDbUser:
+    Type: String
+    Default: root
+    Description: SurrealDB root username
+
+  InstanceType:
+    Type: String
+    Default: t4g.micro
+    AllowedValues:
+      - t4g.micro
+      - t4g.small
+      - t4g.medium
+    Description: EC2 instance type for SurrealDB
+
+  IdleTimeoutMinutes:
+    Type: Number
+    Default: 15
+    MinValue: 5
+    MaxValue: 60
+    Description: Minutes of inactivity before scaling down EC2
+
+  AllowedCidr:
+    Type: String
+    Default: "0.0.0.0/0"
+    Description: CIDR range allowed for API key auth (your team IP, e.g. 203.0.113.10/32)
+
+  KeyPairName:
+    Type: String
+    Default: ""
+    Description: Optional EC2 key pair name for SSH access
+
+  CognitoDomain:
+    Type: String
+    Default: nexo-auth
+    Description: Cognito hosted UI domain prefix (must be globally unique)
+
+  ConsoleDomain:
+    Type: String
+    Description: Custom domain for the web console (e.g. specs.example.com)
+
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Route 53 hosted zone ID for the console domain
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+
+Resources:
+  # ── EC2: SurrealDB (ASG of 1) ──────────────────────────────────────────
+  #
+  # SurrealDB runs on a single EC2 instance managed by an Auto Scaling Group.
+  # The ASG allows scaling to 0 when idle (cost savings) and back to 1 when
+  # the Lambda detects an API request.
+  #
+  # Data persists on a separate EBS volume that survives instance replacement.
+
+  SurrealDbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SurrealDB access (port 8000) and optional SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+          Description: SurrealDB HTTP (protected by DB credentials, Lambda needs access)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCidr
+          Description: SSH (team only)
+
+  SurrealDbVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Size: 10
+      VolumeType: gp3
+      Tags:
+        - Key: Name
+          Value: nexo-surrealdb-data
+        - Key: nexo:role
+          Value: surrealdb-data
+
+  SurrealDbInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SurrealDbVolumeAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:AttachVolume
+                  - ec2:DescribeVolumes
+                Resource: "*"
+        - PolicyName: SurrealDbSsmAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nexo/db-pass"
+
+  SurrealDbInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SurrealDbInstanceRole
+
+  SurrealDbLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: nexo-surrealdb
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64}}"
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
+        IamInstanceProfile:
+          Arn: !GetAtt SurrealDbInstanceProfile.Arn
+        SecurityGroupIds:
+          - !GetAtt SurrealDbSecurityGroup.GroupId
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 10
+              VolumeType: gp3
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: nexo-surrealdb
+              - Key: nexo:role
+                Value: surrealdb
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+
+            # ── Attach persistent EBS volume ──
+            TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+              -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+            INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+              http://169.254.169.254/latest/meta-data/instance-id)
+            AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+              http://169.254.169.254/latest/meta-data/placement/availability-zone)
+            REGION=$(echo "$AZ" | sed 's/[a-z]$//')
+
+            VOLUME_ID=$(aws ec2 describe-volumes --region "$REGION" \
+              --filters "Name=tag:nexo:role,Values=surrealdb-data" "Name=availability-zone,Values=$AZ" \
+              --query "Volumes[0].VolumeId" --output text)
+
+            aws ec2 attach-volume --region "$REGION" \
+              --volume-id "$VOLUME_ID" --instance-id "$INSTANCE_ID" --device /dev/xvdf
+
+            # Wait for volume to attach
+            while [ ! -e /dev/xvdf ] && [ ! -e /dev/nvme1n1 ]; do sleep 1; done
+            sleep 2
+
+            # Resolve device name (Nitro instances use /dev/nvme1n1)
+            DEVICE=/dev/xvdf
+            [ -e /dev/nvme1n1 ] && DEVICE=/dev/nvme1n1
+
+            # Format if new (no filesystem)
+            if ! blkid "$DEVICE"; then
+              mkfs.xfs "$DEVICE"
+            fi
+
+            mkdir -p /data/nexo
+            mount "$DEVICE" /data/nexo
+
+            # ── Install SurrealDB ──
+            curl -sSf https://install.surrealdb.com | sh -s -- --version v3.0.0
+
+            # ── Fetch DB password from SSM Parameter Store ──
+            DB_PASS=$(aws ssm get-parameter --name /nexo/db-pass --with-decryption \
+              --region "$REGION" --query "Parameter.Value" --output text)
+
+            # ── Systemd service ──
+            cat > /etc/systemd/system/surrealdb.service <<SVCEOF
+            [Unit]
+            Description=SurrealDB
+            After=network.target
+
+            [Service]
+            ExecStart=/usr/local/bin/surreal start \
+              --log info \
+              --bind 0.0.0.0:8000 \
+              --user ${SurrealDbUser} \
+              --pass $DB_PASS \
+              surrealkv:/data/nexo
+            Restart=always
+
+            [Install]
+            WantedBy=multi-user.target
+            SVCEOF
+
+            systemctl daemon-reload
+            systemctl enable surrealdb
+            systemctl start surrealdb
+
+  SurrealDbAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: nexo-surrealdb
+      LaunchTemplate:
+        LaunchTemplateId: !Ref SurrealDbLaunchTemplate
+        Version: !GetAtt SurrealDbLaunchTemplate.LatestVersionNumber
+      MinSize: "0"
+      MaxSize: "1"
+      DesiredCapacity: "1"
+      AvailabilityZones:
+        - !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: nexo-surrealdb
+          PropagateAtLaunch: false
+
+  # ── API Gateway ─────────────────────────────────────────────────────────
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - x-api-key
+          - Authorization
+
+  # ── Lambda: API Handler ─────────────────────────────────────────────────
+  #
+  # Handles all /api/* requests. Authenticates via Cognito JWT (browser)
+  # or API key + IP allowlist (CLI/MCP). Wakes EC2 if scaled down.
+  #
+  # You need to create src/lambda/api-handler.ts in your project.
+  # See the Nexo repository for reference implementation.
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: api-handler.lambdaHandler
+      CodeUri: ../
+      MemorySize: 256
+      Environment:
+        Variables:
+          NEXO_DB_USER: !Ref SurrealDbUser
+          NEXO_DB_PASS_SSM: /nexo/db-pass
+          NEXO_DB_NS: nexo
+          NEXO_DB_DB: nexo
+          SURREALDB_ASG_NAME: !Ref SurrealDbAsg
+          API_KEY_SSM: /nexo/api-key
+          ALLOWED_CIDR: !Ref AllowedCidr
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          COGNITO_ISSUER: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/{proxy+}
+            Method: ANY
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ec2:DescribeInstances
+                - autoscaling:DescribeAutoScalingGroups
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - autoscaling:SetDesiredCapacity
+              Resource: !Sub "arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${SurrealDbAsg}"
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nexo/*"
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2022"
+        Format: cjs
+        Sourcemap: true
+        EntryPoints:
+          - src/lambda/api-handler.ts
+        External:
+          - "@aws-sdk/*"
+
+  # ── Lambda: Idle Checker ────────────────────────────────────────────────
+  #
+  # Runs every 15 minutes. If no API requests have been made within
+  # IdleTimeoutMinutes, scales the EC2 ASG to 0 to save costs.
+
+  IdleCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: idle-checker.handler
+      CodeUri: ../
+      MemorySize: 128
+      Environment:
+        Variables:
+          SURREALDB_ASG_NAME: !Ref SurrealDbAsg
+          IDLE_TIMEOUT_MINUTES: !Ref IdleTimeoutMinutes
+          API_ID: !Ref HttpApi
+      Events:
+        IdleCheck:
+          Type: Schedule
+          Properties:
+            Schedule: rate(15 minutes)
+            Description: Check for idle SurrealDB and scale down if inactive
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - autoscaling:DescribeAutoScalingGroups
+                - cloudwatch:GetMetricStatistics
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - autoscaling:SetDesiredCapacity
+              Resource: !Sub "arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${SurrealDbAsg}"
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2022"
+        Format: cjs
+        Sourcemap: true
+        EntryPoints:
+          - src/lambda/idle-checker.ts
+        External:
+          - "@aws-sdk/*"
+
+  # ── S3: Console Static Assets ──────────────────────────────────────────
+
+  ConsoleBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ConsoleBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConsoleBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${ConsoleBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+
+  # ── CloudFront ─────────────────────────────────────────────────────────
+  #
+  # Single distribution serves both the SPA (S3) and API (API Gateway).
+  # /api/* routes to Lambda, everything else to S3 with SPA rewrite.
+
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: nexo-console-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: nexo-spa-rewrite
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Rewrite non-file paths to /index.html for SPA routing
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          // If the URI has a file extension, serve it as-is
+          if (uri.includes('.')) return request;
+          // Otherwise rewrite to index.html for SPA client-side routing
+          request.uri = '/index.html';
+          return request;
+        }
+
+  ConsoleCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref ConsoleDomain
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref ConsoleDomain
+          HostedZoneId: !Ref HostedZoneId
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        Aliases:
+          - !Ref ConsoleDomain
+        ViewerCertificate:
+          AcmCertificateArn: !Ref ConsoleCertificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: S3Console
+            DomainName: !GetAtt ConsoleBucket.RegionalDomainName
+            OriginAccessControlId: !Ref CloudFrontOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+          - Id: ApiGateway
+            DomainName: !Sub "${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: S3Console
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+          Compress: true
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRewriteFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: ApiGateway
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad  # CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # AllViewerExceptHostHeader
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+              - PUT
+              - POST
+              - PATCH
+              - DELETE
+            Compress: true
+
+  ConsoleDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ConsoleDomain
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront global hosted zone ID
+
+  # ── Cognito ─────────────────────────────────────────────────────────────
+  #
+  # Provides browser-based authentication for the web console.
+  # CLI/MCP users authenticate via API key instead.
+
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: nexo-users
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomain
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: nexo-console
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      CallbackURLs:
+        - !Sub "https://${ConsoleDomain}/auth/callback"
+      LogoutURLs:
+        - !Sub "https://${ConsoleDomain}/"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  SurrealDbAsgName:
+    Description: Auto Scaling Group name for SurrealDB
+    Value: !Ref SurrealDbAsg
+  ConsoleUrl:
+    Description: Web console URL
+    Value: !Sub "https://${ConsoleDomain}"
+  ConsoleBucketName:
+    Description: S3 bucket for console static assets
+    Value: !Ref ConsoleBucket
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID (for cache invalidation)
+    Value: !Ref CloudFrontDistribution
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+  CognitoClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
+  CognitoDomainUrl:
+    Description: Cognito hosted UI domain
+    Value: !Sub "https://${CognitoDomain}.auth.${AWS::Region}.amazoncognito.com"

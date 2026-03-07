@@ -1,6 +1,6 @@
 {
   "name": "@formigio/nexo",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Specification graph system — make your entire app architecture queryable",
   "license": "MIT",
   "author": "Never Behind Group, LLC",

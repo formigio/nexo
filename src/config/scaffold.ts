@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { getUserConfigPath } from "./loader.js";
 
 const EXAMPLE_RULE = `// Example custom lint rule for Nexo.
 // Rename this file (remove the _ prefix) to activate it.
@@ -90,5 +91,37 @@ export function scaffoldConfig(cwd: string = process.cwd()): string | null {
     writeFileSync(examplePath, EXAMPLE_RULE, "utf-8");
   }
 
+  return configPath;
+}
+
+const USER_STARTER_CONFIG = `{
+  "db": {
+    "username": "root",
+    "password": "root"
+  },
+  "api": {
+    "url": "",
+    "key": ""
+  }
+}
+`;
+
+/**
+ * Create `~/.nexo/config.json` with user-appropriate defaults.
+ * Returns the path to the created file, or null if it already exists.
+ */
+export function scaffoldUserConfig(): string | null {
+  const configPath = getUserConfigPath();
+
+  if (existsSync(configPath)) {
+    return null;
+  }
+
+  const dir = dirname(configPath);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  writeFileSync(configPath, USER_STARTER_CONFIG, "utf-8");
   return configPath;
 }

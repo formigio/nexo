@@ -1,7 +1,5 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
-import { listNodes } from "../../db/nodes.js";
-import { listEdges } from "../../db/edges.js";
+import { getClient } from "../../client/factory.js";
 import { heading, error, info, nodeLabel } from "../output.js";
 import chalk from "chalk";
 
@@ -14,9 +12,9 @@ featureCommand
   .option("--app <app>", "Filter by app")
   .option("--status <status>", "Filter by status (proposed, in-progress, deployed, deprecated)")
   .action(async (opts) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
-      const nodes = await listNodes(db, { app: opts.app, type: "Feature" });
+      const nodes = await client.listNodes({ app: opts.app, type: "Feature" });
 
       let features = nodes;
       if (opts.status) {
@@ -26,7 +24,6 @@ featureCommand
       heading("Features");
       if (features.length === 0) {
         info("No features found.");
-        await closeDb();
         return;
       }
 
@@ -54,11 +51,11 @@ featureCommand
       }
 
       console.log(chalk.dim(`\n${features.length} feature(s)`));
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });
 
@@ -66,25 +63,21 @@ featureCommand
   .command("scope <id>")
   .description("Show all nodes belonging to a feature")
   .action(async (id) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
-
-      // Get the feature node
-      const features = await listNodes(db);
-      const feature = features.find((n) => n.id === id);
+      const feature = await client.getNode(id);
       if (!feature || feature.type !== "Feature") {
         error(`Feature not found: ${id}`);
-        await closeDb();
         process.exit(1);
       }
 
       // Find all BELONGS_TO edges pointing to this feature
-      const edges = await listEdges(db, { type: "BELONGS_TO", to: id });
-      const memberIds = edges.map((e) => e.in.replace(/^node:/, ""));
+      const edges = await client.listEdges({ type: "BELONGS_TO", to: id });
+      const memberIds = new Set(edges.map((e) => e.in.replace(/^node:/, "")));
 
-      // Fetch those nodes
-      const allNodes = await listNodes(db);
-      const memberNodes = allNodes.filter((n) => memberIds.includes(n.id));
+      // Fetch member nodes
+      const allNodes = await client.listNodes({ app: feature.app });
+      const memberNodes = allNodes.filter((n) => memberIds.has(n.id));
 
       const props = feature.props as any;
       heading(
@@ -111,10 +104,10 @@ featureCommand
       }
 
       console.log(chalk.dim(`\n${memberNodes.length} node(s) in scope`));
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

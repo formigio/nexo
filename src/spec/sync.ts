@@ -1,7 +1,5 @@
-import type { Surreal } from "surrealdb";
 import chalk from "chalk";
-import { getNode, createNode, updateNode } from "../db/nodes.js";
-import { createEdge, listEdges } from "../db/edges.js";
+import type { GraphClient } from "../client/types.js";
 import type { ResolvedSpec, SpecSyncResults } from "./types.js";
 
 /**
@@ -9,7 +7,7 @@ import type { ResolvedSpec, SpecSyncResults } from "./types.js";
  * Dry-run by default unless `apply` is true.
  */
 export async function runSpecSync(
-  db: Surreal,
+  client: GraphClient,
   spec: ResolvedSpec,
   apply: boolean,
 ): Promise<SpecSyncResults> {
@@ -20,11 +18,11 @@ export async function runSpecSync(
 
   // Sync nodes
   for (const node of spec.nodes) {
-    const existing = await getNode(db, node.id);
+    const existing = await client.getNode(node.id);
 
     if (!existing) {
       if (apply) {
-        await createNode(db, {
+        await client.createNode({
           id: node.id,
           type: node.type,
           app: node.app,
@@ -45,7 +43,7 @@ export async function runSpecSync(
         results.nodes.unchanged.push(node.id);
       } else {
         if (apply) {
-          await updateNode(db, node.id, {
+          await client.updateNode(node.id, {
             description: node.description,
             tags: node.tags,
             props: { ...existing.props, ...node.props },
@@ -58,7 +56,7 @@ export async function runSpecSync(
 
   // Sync edges
   for (const edge of spec.edges) {
-    const existing = await listEdges(db, {
+    const existing = await client.listEdges({
       from: edge.from,
       to: edge.to,
       type: edge.type,
@@ -71,7 +69,7 @@ export async function runSpecSync(
 
     if (apply) {
       try {
-        await createEdge(db, {
+        await client.createEdge({
           type: edge.type,
           from: edge.from,
           to: edge.to,

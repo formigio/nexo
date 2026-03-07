@@ -1,7 +1,6 @@
-import type { Surreal } from "surrealdb";
 import { generateNodeId } from "../schema/ids.js";
 import type { NodeType, EdgeType } from "../schema/types.js";
-import { listNodes } from "../db/nodes.js";
+import type { GraphClient } from "../client/types.js";
 import type {
   ParsedSpecFile,
   ResolvedSpec,
@@ -21,7 +20,7 @@ import type {
  */
 export async function resolveSpecs(
   files: ParsedSpecFile[],
-  db?: Surreal,
+  client?: GraphClient,
 ): Promise<ResolvedSpec> {
   const warnings: string[] = [];
 
@@ -34,11 +33,11 @@ export async function resolveSpecs(
     }
   }
 
-  // Phase 2: Build DB fallback index if database is available
+  // Phase 2: Build DB fallback index if client is available
   let dbIndex: Map<string, { id: string; type: NodeType }> | null = null;
-  if (db) {
+  if (client) {
     dbIndex = new Map();
-    const allNodes = await listNodes(db);
+    const allNodes = await client.listNodes();
     for (const node of allNodes) {
       dbIndex.set(node.name, { id: node.id, type: node.type as NodeType });
     }

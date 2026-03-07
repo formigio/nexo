@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Surreal } from "surrealdb";
+import type { GraphClient } from "../../client/types.js";
 import { z } from "zod";
-import { getNode, listNodes, createNode, updateNode, deleteNode } from "../../db/nodes.js";
 import type { Node } from "../../schema/types.js";
 import { NODE_TYPES } from "../../schema/types.js";
 
@@ -56,14 +55,14 @@ function formatNodeTable(nodes: Node[]): string {
   return lines.join("\n");
 }
 
-export function registerNodeTools(server: McpServer, db: Surreal): void {
+export function registerNodeTools(server: McpServer, client: GraphClient): void {
   server.tool(
     "get_node",
     "Get a node by its ID (e.g. scr_schedule, cmp_rsvp_button, ftr_transportation). Returns full details including type-specific props.",
     { id: z.string().describe("Node ID (e.g. scr_schedule)") },
     async ({ id }) => {
       try {
-        const node = await getNode(db, id);
+        const node = await client.getNode(id);
         if (!node) {
           return { content: [{ type: "text", text: `Node not found: ${id}` }], isError: true };
         }
@@ -84,7 +83,7 @@ export function registerNodeTools(server: McpServer, db: Surreal): void {
     },
     async ({ app, type, tag }) => {
       try {
-        const nodes = await listNodes(db, { app, type, tag });
+        const nodes = await client.listNodes({ app, type, tag });
         return { content: [{ type: "text", text: formatNodeTable(nodes) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
@@ -105,7 +104,7 @@ export function registerNodeTools(server: McpServer, db: Surreal): void {
     },
     async ({ type, app, name, description, tags, props }) => {
       try {
-        const node = await createNode(db, {
+        const node = await client.createNode({
           type: type as any,
           app,
           name,
@@ -138,7 +137,7 @@ export function registerNodeTools(server: McpServer, db: Surreal): void {
         if (tags !== undefined) updates.tags = tags;
         if (props !== undefined) updates.props = props;
 
-        const node = await updateNode(db, id, updates as any);
+        const node = await client.updateNode(id, updates as any);
         return { content: [{ type: "text", text: `Updated node (v${node.version})\n\n${formatNode(node)}` }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
@@ -152,7 +151,7 @@ export function registerNodeTools(server: McpServer, db: Surreal): void {
     { id: z.string().describe("Node ID to delete") },
     async ({ id }) => {
       try {
-        await deleteNode(db, id);
+        await client.deleteNode(id);
         return { content: [{ type: "text", text: `Deleted node: ${id} (and all connected edges)` }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };

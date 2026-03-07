@@ -1,15 +1,18 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Surreal } from "surrealdb";
-import { listNodes, getNode, normalizeNode } from "../db/nodes.js";
-import { listEdges } from "../db/edges.js";
+import { ZodError } from "zod";
+import { createNode, listNodes, getNode, updateNode, deleteNode, normalizeNode } from "../db/nodes.js";
+import { createEdge, listEdges, deleteEdge } from "../db/edges.js";
 import { traverse, impactAnalysis } from "../db/queries.js";
+import { initDb } from "../db/client.js";
+import { runMigrations } from "../db/migrate.js";
 
 // ── Helpers ──
 
 function cors(res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-api-key, Authorization");
 }
 
 function json(res: ServerResponse, data: unknown, status = 200): void {
@@ -31,6 +34,20 @@ function serverError(res: ServerResponse, err: unknown): void {
   json(res, { error: message }, 500);
 }
 
+function parseBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf-8");
+      if (!raw) { resolve({}); return; }
+      try { resolve(JSON.parse(raw)); }
+      catch { reject(new Error("Invalid JSON body")); }
+    });
+    req.on("error", reject);
+  });
+}
+
 // ── Route handler ──
 
 export function createHandler(db: Surreal, defaultApp?: string) {
@@ -40,6 +57,76 @@ export function createHandler(db: Surreal, defaultApp?: string) {
     const method = req.method ?? "GET";
 
     try {
+      // OPTIONS — CORS preflight
+      if (method === "OPTIONS") {
+        cors(res);
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      // ── POST /api/init ──
+      if (method === "POST" && pathname === "/api/init") {
+        const freshDb = await initDb();
+        const migrations = await runMigrations(freshDb);
+        json(res, { migrations });
+        return;
+      }
+
+      // ── POST /api/nodes ──
+      if (method === "POST" && pathname === "/api/nodes") {
+        const body = await parseBody(req) as any;
+        const node = await createNode(db, body);
+        json(res, node, 201);
+        return;
+      }
+
+      // ── PUT /api/nodes/:id ──
+      const nodeUpdateMatch = pathname.match(/^\/api\/nodes\/([^/]+)$/);
+      if (method === "PUT" && nodeUpdateMatch) {
+        const id = decodeURIComponent(nodeUpdateMatch[1]);
+        const body = await parseBody(req) as any;
+        const node = await updateNode(db, id, body);
+        json(res, node);
+        return;
+      }
+
+      // ── DELETE /api/nodes/:id ──
+      const nodeDeleteMatch = pathname.match(/^\/api\/nodes\/([^/]+)$/);
+      if (method === "DELETE" && nodeDeleteMatch) {
+        const id = decodeURIComponent(nodeDeleteMatch[1]);
+        await deleteNode(db, id);
+        json(res, { ok: true });
+        return;
+      }
+
+      // ── POST /api/edges ──
+      if (method === "POST" && pathname === "/api/edges") {
+        const body = await parseBody(req) as any;
+        const edge = await createEdge(db, body);
+        json(res, edge, 201);
+        return;
+      }
+
+      // ── DELETE /api/edges/:id ──
+      const edgeDeleteMatch = pathname.match(/^\/api\/edges\/([^/]+)$/);
+      if (method === "DELETE" && edgeDeleteMatch) {
+        const id = decodeURIComponent(edgeDeleteMatch[1]);
+        await deleteEdge(db, id);
+        json(res, { ok: true });
+        return;
+      }
+
+      // ── GET /api/edges?type=&from=&to= ──
+      if (method === "GET" && pathname === "/api/edges") {
+        const type = url.searchParams.get("type") ?? undefined;
+        const from = url.searchParams.get("from") ?? undefined;
+        const to = url.searchParams.get("to") ?? undefined;
+        const edges = await listEdges(db, { type, from, to });
+        json(res, edges);
+        return;
+      }
+
       // GET /api/graph?app= — full graph data
       if (method === "GET" && pathname === "/api/graph") {
         const app = url.searchParams.get("app") ?? defaultApp;
@@ -88,7 +175,6 @@ export function createHandler(db: Surreal, defaultApp?: string) {
       if (method === "GET" && nodeMatch) {
         const id = decodeURIComponent(nodeMatch[1]);
 
-        // Check for /edges sub-route handled below
         const node = await getNode(db, id);
         if (!node) {
           notFound(res);
@@ -188,11 +274,9 @@ export function createHandler(db: Surreal, defaultApp?: string) {
         // Fetch all member nodes
         let members: typeof feature[] = [];
         if (memberIds.length > 0) {
-          const recordIds = memberIds
-            .map((mid) => `type::record("node", "${mid}")`)
-            .join(", ");
           const [results] = await db.query<[any[]]>(
-            `SELECT * FROM node WHERE id IN [${recordIds}]`
+            `SELECT * FROM node WHERE <string> id IN $ids`,
+            { ids: memberIds },
           );
           members = (results ?? []).map(normalizeNode);
         }
@@ -248,20 +332,25 @@ export function createHandler(db: Surreal, defaultApp?: string) {
         return;
       }
 
-      // GET /api/nodes?ids=id1&ids=id2 — batch node fetch
+      // GET /api/nodes — list or batch fetch
       if (method === "GET" && pathname === "/api/nodes") {
         const ids = url.searchParams.getAll("ids");
-        if (ids.length === 0) {
-          json(res, []);
+        if (ids.length > 0) {
+          // Batch fetch by IDs (parameterized to prevent injection)
+          const [results] = await db.query<[any[]]>(
+            `SELECT * FROM node WHERE <string> id IN $ids`,
+            { ids },
+          );
+          const nodes = (results ?? []).map(normalizeNode);
+          json(res, nodes);
           return;
         }
 
-        // Single query instead of N parallel getNode calls to avoid connection exhaustion
-        const recordIds = ids.map((id) => `type::record("node", "${id}")`).join(", ");
-        const [results] = await db.query<[any[]]>(
-          `SELECT * FROM node WHERE id IN [${recordIds}]`
-        );
-        const nodes = (results ?? []).map(normalizeNode);
+        // Filtered listing
+        const app = url.searchParams.get("app") ?? undefined;
+        const type = url.searchParams.get("type") ?? undefined;
+        const tag = url.searchParams.get("tag") ?? undefined;
+        const nodes = await listNodes(db, { app, type, tag });
         json(res, nodes);
         return;
       }
@@ -290,16 +379,23 @@ export function createHandler(db: Surreal, defaultApp?: string) {
         return;
       }
 
-      // OPTIONS — CORS preflight
-      if (method === "OPTIONS") {
-        cors(res);
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
       notFound(res);
     } catch (err) {
+      // Validation / constraint errors → 400
+      if (err instanceof ZodError) {
+        json(res, { error: err.issues }, 400);
+        return;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("not found:") ||
+        msg.includes("cannot originate from") ||
+        msg.includes("cannot target") ||
+        msg.includes("Invalid JSON body")
+      ) {
+        json(res, { error: msg }, 400);
+        return;
+      }
       console.error("Route error:", err);
       serverError(res, err);
     }

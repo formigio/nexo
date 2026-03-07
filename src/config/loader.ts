@@ -1,33 +1,44 @@
 import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { homedir } from "node:os";
 import { NexoConfigSchema, DEFAULTS } from "./schema.js";
 import type { NexoConfig } from "./schema.js";
 import type { DbConfig } from "../db/client.js";
 
 let cached: NexoConfig | null = null;
 
+export interface ApiConfig {
+  url: string;
+  key?: string;
+}
+
 /**
- * Load and validate `.nexo/config.json` from the current working directory.
- * Returns an empty config if the file doesn't exist.
- * Caches the result — subsequent calls return the same object.
+ * Resolve the user-level config directory.
+ * Honors `$NEXO_HOME`; falls back to `~/.nexo`.
  */
-export function loadConfig(cwd: string = process.cwd()): NexoConfig {
-  if (cached) return cached;
+export function getUserConfigDir(): string {
+  return process.env.NEXO_HOME ?? join(homedir(), ".nexo");
+}
 
-  const configPath = resolve(cwd, ".nexo", "config.json");
+/**
+ * Absolute path to the user-level config file.
+ */
+export function getUserConfigPath(): string {
+  return join(getUserConfigDir(), "config.json");
+}
 
-  if (!existsSync(configPath)) {
-    cached = {};
-    return cached;
-  }
+/**
+ * Load and validate a single config file.
+ * Returns `{}` if the file doesn't exist.
+ */
+function loadConfigFile(path: string, label: string): NexoConfig {
+  if (!existsSync(path)) return {};
 
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    raw = JSON.parse(readFileSync(path, "utf-8"));
   } catch (err: any) {
-    throw new Error(
-      `.nexo/config.json: invalid JSON — ${err.message}`
-    );
+    throw new Error(`${label}: invalid JSON — ${err.message}`);
   }
 
   const result = NexoConfigSchema.safeParse(raw);
@@ -35,10 +46,56 @@ export function loadConfig(cwd: string = process.cwd()): NexoConfig {
     const issues = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new Error(`.nexo/config.json: validation failed\n${issues}`);
+    throw new Error(`${label}: validation failed\n${issues}`);
   }
 
-  cached = result.data;
+  return result.data;
+}
+
+/**
+ * Deep-merge two NexoConfig objects. `higher` wins for each defined field.
+ */
+function mergeConfigs(lower: NexoConfig, higher: NexoConfig): NexoConfig {
+  const merged: NexoConfig = { ...lower };
+
+  // Top-level scalars
+  if (higher.app !== undefined) merged.app = higher.app;
+
+  // Nested objects — field-by-field merge
+  if (lower.db || higher.db) {
+    merged.db = { ...lower.db, ...higher.db };
+  }
+  if (lower.ingest || higher.ingest) {
+    merged.ingest = { ...lower.ingest, ...higher.ingest };
+  }
+  if (lower.web || higher.web) {
+    merged.web = { ...lower.web, ...higher.web };
+  }
+  if (lower.api || higher.api) {
+    merged.api = { ...lower.api, ...higher.api };
+  }
+
+  return merged;
+}
+
+/**
+ * Load and merge user config (`~/.nexo/config.json`) and project config
+ * (`.nexo/config.json` in cwd). Project config wins over user config.
+ * Caches the result — subsequent calls return the same object.
+ */
+export function loadConfig(cwd: string = process.cwd()): NexoConfig {
+  if (cached) return cached;
+
+  const userConfig = loadConfigFile(
+    getUserConfigPath(),
+    `~/.nexo/config.json`,
+  );
+  const projectConfig = loadConfigFile(
+    resolve(cwd, ".nexo", "config.json"),
+    `.nexo/config.json`,
+  );
+
+  cached = mergeConfigs(userConfig, projectConfig);
   return cached;
 }
 
@@ -52,7 +109,7 @@ export function getConfig(): NexoConfig {
 
 /**
  * Build a DbConfig by merging (lowest to highest priority):
- *   hardcoded defaults → .nexo/config.json → env vars
+ *   hardcoded defaults → user config → project config → env vars
  *
  * CLI flags are NOT handled here — callers that accept explicit
  * DB flags should merge them on top of this result.
@@ -65,6 +122,21 @@ export function getDbConfig(): DbConfig {
     database: process.env.NEXO_DB_DB ?? cfg.db?.database ?? DEFAULTS.db.database,
     username: process.env.NEXO_DB_USER ?? cfg.db?.username ?? DEFAULTS.db.username,
     password: process.env.NEXO_DB_PASS ?? cfg.db?.password ?? DEFAULTS.db.password,
+  };
+}
+
+/**
+ * Build an ApiConfig from merged config + env var overrides.
+ * Returns `null` if no API URL is configured anywhere.
+ */
+export function getApiConfig(): ApiConfig | null {
+  const cfg = getConfig();
+  const url = process.env.NEXO_API_URL ?? cfg.api?.url;
+  if (!url) return null;
+
+  return {
+    url,
+    key: process.env.NEXO_API_KEY ?? cfg.api?.key,
   };
 }
 

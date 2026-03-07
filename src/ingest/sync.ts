@@ -1,7 +1,5 @@
-import type { Surreal } from "surrealdb";
 import chalk from "chalk";
-import { getNode, createNode, updateNode, listNodes } from "../db/nodes.js";
-import { createEdge, listEdges } from "../db/edges.js";
+import type { GraphClient } from "../client/types.js";
 import { generateNodeId } from "../schema/ids.js";
 import type { Node } from "../schema/types.js";
 import type { ParsedEndpoint } from "./parsers/sam.js";
@@ -40,7 +38,7 @@ interface PropsUpdate {
 /**
  * Run the full ingest sync. Dry-run by default unless opts.apply is true.
  */
-export async function runSync(db: Surreal, opts: SyncOptions): Promise<SyncResults> {
+export async function runSync(client: GraphClient, opts: SyncOptions): Promise<SyncResults> {
   const results: SyncResults = {
     endpoints: { unchanged: [], created: [], updated: [] },
     screens: { unchanged: [], created: [], updated: [] },
@@ -55,14 +53,14 @@ export async function runSync(db: Surreal, opts: SyncOptions): Promise<SyncResul
   if (opts.backendPath) {
     const templatePath = `${opts.backendPath}/unified-stack/template.yaml`;
     parsedEndpoints = parseSamTemplate(templatePath);
-    await syncEndpoints(db, parsedEndpoints, opts, results.endpoints);
+    await syncEndpoints(client, parsedEndpoints, opts, results.endpoints);
   }
 
   // Sync Screens from App.jsx
   if (opts.frontendPath) {
     const appPath = `${opts.frontendPath}/src/App.jsx`;
     parsedScreens = parseRoutes(appPath);
-    await syncScreens(db, parsedScreens, opts, results.screens);
+    await syncScreens(client, parsedScreens, opts, results.screens);
   }
 
   // Sync SourceFile nodes from filesystem
@@ -76,13 +74,13 @@ export async function runSync(db: Surreal, opts: SyncOptions): Promise<SyncResul
     allSourceFiles.push(...parseSourceFiles(opts.backendPath, repoName));
   }
   if (allSourceFiles.length > 0) {
-    await syncSourceFiles(db, allSourceFiles, opts, results.sourceFiles);
+    await syncSourceFiles(client, allSourceFiles, opts, results.sourceFiles);
   }
 
   // Sync IMPLEMENTED_IN edges (match spec nodes to source files)
   if (allSourceFiles.length > 0) {
     await syncImplementedInEdges(
-      db, opts, parsedEndpoints, parsedScreens, results.implementedInEdges,
+      client, opts, parsedEndpoints, parsedScreens, results.implementedInEdges,
     );
   }
 
@@ -90,7 +88,7 @@ export async function runSync(db: Surreal, opts: SyncOptions): Promise<SyncResul
 }
 
 async function syncEndpoints(
-  db: Surreal,
+  client: GraphClient,
   endpoints: ParsedEndpoint[],
   opts: SyncOptions,
   result: TypeSyncResult
@@ -105,11 +103,11 @@ async function syncEndpoints(
       authRequired: ep.authRequired,
     };
 
-    const existing = await getNode(db, id);
+    const existing = await client.getNode(id);
 
     if (!existing) {
       if (opts.apply) {
-        await createNode(db, {
+        await client.createNode({
           type: "APIEndpoint",
           app: opts.app,
           name,
@@ -125,7 +123,7 @@ async function syncEndpoints(
         result.unchanged.push(id);
       } else {
         if (opts.apply) {
-          await updateNode(db, id, { props: { ...existing.props, ...newProps } });
+          await client.updateNode(id, { props: { ...existing.props, ...newProps } });
         }
         result.updated.push({ id, changes });
       }
@@ -134,7 +132,7 @@ async function syncEndpoints(
 }
 
 async function syncScreens(
-  db: Surreal,
+  client: GraphClient,
   screens: ParsedScreen[],
   opts: SyncOptions,
   result: TypeSyncResult
@@ -154,11 +152,11 @@ async function syncScreens(
       accessLevel: screen.accessLevel,
     };
 
-    const existing = await getNode(db, id);
+    const existing = await client.getNode(id);
 
     if (!existing) {
       if (opts.apply) {
-        await createNode(db, {
+        await client.createNode({
           type: "Screen",
           app: opts.app,
           name,
@@ -174,7 +172,7 @@ async function syncScreens(
         result.unchanged.push(id);
       } else {
         if (opts.apply) {
-          await updateNode(db, id, { props: { ...existing.props, ...newProps } });
+          await client.updateNode(id, { props: { ...existing.props, ...newProps } });
         }
         result.updated.push({ id, changes });
       }
@@ -183,7 +181,7 @@ async function syncScreens(
 }
 
 async function syncSourceFiles(
-  db: Surreal,
+  client: GraphClient,
   files: ParsedSourceFile[],
   opts: SyncOptions,
   result: TypeSyncResult
@@ -199,11 +197,11 @@ async function syncSourceFiles(
       layer: file.layer,
     };
 
-    const existing = await getNode(db, id);
+    const existing = await client.getNode(id);
 
     if (!existing) {
       if (opts.apply) {
-        await createNode(db, {
+        await client.createNode({
           type: "SourceFile",
           app: opts.app,
           name,
@@ -219,7 +217,7 @@ async function syncSourceFiles(
         result.unchanged.push(id);
       } else {
         if (opts.apply) {
-          await updateNode(db, id, { props: { ...existing.props, ...newProps } });
+          await client.updateNode(id, { props: { ...existing.props, ...newProps } });
         }
         result.updated.push({ id, changes });
       }
@@ -228,7 +226,7 @@ async function syncSourceFiles(
 }
 
 async function syncImplementedInEdges(
-  db: Surreal,
+  client: GraphClient,
   opts: SyncOptions,
   endpoints: ParsedEndpoint[],
   screens: ParsedScreen[],
@@ -256,7 +254,7 @@ async function syncImplementedInEdges(
     const fileId = generateNodeId("SourceFile", fileName);
 
     // Check if edge already exists
-    const existing = await listEdges(db, { from: epId, to: fileId, type: "IMPLEMENTED_IN" });
+    const existing = await client.listEdges({ from: epId, to: fileId, type: "IMPLEMENTED_IN" });
     if (existing.length > 0) {
       result.skipped++;
       continue;
@@ -264,7 +262,7 @@ async function syncImplementedInEdges(
 
     if (opts.apply) {
       try {
-        await createEdge(db, { type: "IMPLEMENTED_IN", from: epId, to: fileId });
+        await client.createEdge({ type: "IMPLEMENTED_IN", from: epId, to: fileId });
         result.created++;
       } catch {
         result.skipped++;
@@ -289,7 +287,7 @@ async function syncImplementedInEdges(
     const fileName = sourceFileName(repo, relativePath);
     const fileId = generateNodeId("SourceFile", fileName);
 
-    const existing = await listEdges(db, { from: scrId, to: fileId, type: "IMPLEMENTED_IN" });
+    const existing = await client.listEdges({ from: scrId, to: fileId, type: "IMPLEMENTED_IN" });
     if (existing.length > 0) {
       result.skipped++;
       continue;
@@ -297,7 +295,7 @@ async function syncImplementedInEdges(
 
     if (opts.apply) {
       try {
-        await createEdge(db, { type: "IMPLEMENTED_IN", from: scrId, to: fileId });
+        await client.createEdge({ type: "IMPLEMENTED_IN", from: scrId, to: fileId });
         result.created++;
       } catch {
         result.skipped++;

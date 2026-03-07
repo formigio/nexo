@@ -1,6 +1,4 @@
-import type { Surreal } from "surrealdb";
-import { listNodes } from "../db/nodes.js";
-import { listEdges } from "../db/edges.js";
+import type { GraphClient } from "../client/types.js";
 import type { Node, Edge } from "../schema/types.js";
 import type { LintContext, LintRule, LintReport, Severity, Category } from "./types.js";
 import { ALL_RULES } from "./rules.js";
@@ -46,9 +44,9 @@ export interface RunLintOptions {
   skipCustomRules?: boolean;
 }
 
-export async function runLint(db: Surreal, opts: RunLintOptions): Promise<LintReport> {
-  const nodes = await listNodes(db, opts.app ? { app: opts.app } : undefined);
-  const edges = await listEdges(db);
+export async function runLint(client: GraphClient, opts: RunLintOptions): Promise<LintReport> {
+  const nodes = await client.listNodes(opts.app ? { app: opts.app } : undefined);
+  const edges = await client.listEdges();
   const ctx = buildContext(nodes, edges);
 
   const customRules = opts.skipCustomRules ? [] : await loadCustomRules();

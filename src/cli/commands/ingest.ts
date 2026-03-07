@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
+import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
 import { runSync, printSyncResults } from "../../ingest/sync.js";
 import { error } from "../output.js";
@@ -26,9 +26,9 @@ export const ingestCommand = new Command("ingest")
       process.exit(1);
     }
 
+    const client = await getClient();
     try {
-      const db = await getDb();
-      const results = await runSync(db, {
+      const results = await runSync(client, {
         app,
         frontendPath: frontend,
         backendPath: backend,
@@ -36,10 +36,10 @@ export const ingestCommand = new Command("ingest")
       });
 
       printSyncResults(results, Boolean(opts.apply));
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Surreal } from "surrealdb";
+import type { GraphClient } from "../../client/types.js";
 import { z } from "zod";
-import { listEdges, createEdge, deleteEdge } from "../../db/edges.js";
 import type { Edge } from "../../schema/types.js";
 import { EDGE_TYPES } from "../../schema/types.js";
 
@@ -20,7 +19,7 @@ function formatEdgeTable(edges: Edge[]): string {
   return lines.join("\n");
 }
 
-export function registerEdgeTools(server: McpServer, db: Surreal): void {
+export function registerEdgeTools(server: McpServer, client: GraphClient): void {
   server.tool(
     "list_edges",
     "List edges (relationships) in the spec graph. Filter by edge type, source node, or target node.",
@@ -31,7 +30,7 @@ export function registerEdgeTools(server: McpServer, db: Surreal): void {
     },
     async ({ type, from, to }) => {
       try {
-        const edges = await listEdges(db, { type, from, to });
+        const edges = await client.listEdges({ type, from, to });
         return { content: [{ type: "text", text: formatEdgeTable(edges) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
@@ -50,7 +49,7 @@ export function registerEdgeTools(server: McpServer, db: Surreal): void {
     },
     async ({ type, from, to, metadata }) => {
       try {
-        const edge = await createEdge(db, {
+        const edge = await client.createEdge({
           type: type as any,
           from,
           to,
@@ -69,7 +68,7 @@ export function registerEdgeTools(server: McpServer, db: Surreal): void {
     { id: z.string().describe("Edge ID to delete") },
     async ({ id }) => {
       try {
-        await deleteEdge(db, id);
+        await client.deleteEdge(id);
         return { content: [{ type: "text", text: `Deleted edge: ${id}` }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };

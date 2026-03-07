@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Surreal } from "surrealdb";
+import type { GraphClient } from "../../client/types.js";
 import { z } from "zod";
-import { traverse, impactAnalysis } from "../../db/queries.js";
 import type { Node, Edge } from "../../schema/types.js";
 
 function nodeLabel(node: Node): string {
@@ -12,7 +11,7 @@ function edgeLabel(edge: Edge): string {
   return `${edge.in} ─${edge.type}→ ${edge.out}`;
 }
 
-export function registerGraphTools(server: McpServer, db: Surreal): void {
+export function registerGraphTools(server: McpServer, client: GraphClient): void {
   server.tool(
     "traverse",
     "BFS traversal from a starting node. Follows edges in both directions. Returns connected nodes and edges grouped by type.",
@@ -23,7 +22,7 @@ export function registerGraphTools(server: McpServer, db: Surreal): void {
     },
     async ({ id, depth, edgeTypes }) => {
       try {
-        const result = await traverse(db, id, { depth, edgeTypes });
+        const result = await client.traverse(id, { depth, edgeTypes });
 
         const lines: string[] = [];
         lines.push(`Traversal from ${id} (depth=${depth ?? 2})`);
@@ -72,7 +71,7 @@ export function registerGraphTools(server: McpServer, db: Surreal): void {
     },
     async ({ id, hops }) => {
       try {
-        const result = await impactAnalysis(db, id, hops ?? 3);
+        const result = await client.impactAnalysis(id, hops ?? 3);
 
         const lines: string[] = [];
         lines.push(`Impact Analysis: ${result.startNode.type}: ${result.startNode.name}`);

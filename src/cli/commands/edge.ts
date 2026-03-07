@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
-import { createEdge, listEdges, deleteEdge } from "../../db/edges.js";
+import { getClient } from "../../client/factory.js";
 import { EDGE_TYPES } from "../../schema/types.js";
 import { heading, success, error, edgeTable } from "../output.js";
 
@@ -12,6 +11,7 @@ edgeCommand
   .description(`Create an edge. Types: ${EDGE_TYPES.join(", ")}`)
   .option("--meta <metadata...>", "Metadata as key=value pairs")
   .action(async (type, from, to, opts) => {
+    const client = await getClient();
     try {
       if (!EDGE_TYPES.includes(type)) {
         error(`Invalid edge type: ${type}. Valid types: ${EDGE_TYPES.join(", ")}`);
@@ -28,14 +28,13 @@ edgeCommand
         }
       }
 
-      const db = await getDb();
-      const edge = await createEdge(db, { type, from, to, metadata });
+      const edge = await client.createEdge({ type, from, to, metadata });
       success(`Created edge: ${from} ─${type}→ ${to}`);
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });
 
@@ -46,9 +45,9 @@ edgeCommand
   .option("--from <from>", "Filter by source node ID")
   .option("--to <to>", "Filter by target node ID")
   .action(async (opts) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
-      const edges = await listEdges(db, {
+      const edges = await client.listEdges({
         type: opts.type,
         from: opts.from,
         to: opts.to,
@@ -56,11 +55,11 @@ edgeCommand
 
       heading("Edges");
       edgeTable(edges);
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });
 
@@ -68,14 +67,14 @@ edgeCommand
   .command("delete <id>")
   .description("Delete an edge by ID")
   .action(async (id) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
-      await deleteEdge(db, id);
+      await client.deleteEdge(id);
       success(`Deleted edge: ${id}`);
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

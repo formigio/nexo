@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
+import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
 import { runLint } from "../../lint/runner.js";
 import type { Severity, Category } from "../../lint/types.js";
@@ -22,12 +22,12 @@ export const lintCommand = new Command("lint")
   .option("--verbose", "Show passing rules too", false)
   .option("--json", "Output as JSON", false)
   .action(async (opts) => {
+    const client = await getClient();
     try {
       const cfg = getConfig();
       const app = opts.app ?? cfg.app;
 
-      const db = await getDb();
-      const report = await runLint(db, {
+      const report = await runLint(client, {
         app,
         rules: opts.rule,
         severity: opts.severity as Severity,
@@ -37,7 +37,6 @@ export const lintCommand = new Command("lint")
 
       if (opts.json) {
         console.log(JSON.stringify(report, null, 2));
-        await closeDb();
         return;
       }
 
@@ -88,11 +87,10 @@ export const lintCommand = new Command("lint")
       } else {
         console.log(`  ${parts.join(chalk.dim(", "))}`);
       }
-
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

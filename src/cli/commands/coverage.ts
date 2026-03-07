@@ -1,8 +1,6 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
+import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
-import { listNodes } from "../../db/nodes.js";
-import { listEdges } from "../../db/edges.js";
 import { heading, error, info } from "../output.js";
 import chalk from "chalk";
 
@@ -14,6 +12,7 @@ export const coverageCommand = new Command("coverage")
   .option("--app <name>", "Application name (e.g., myapp)")
   .option("--verbose", "Show uncovered nodes", false)
   .action(async (opts) => {
+    const client = await getClient();
     try {
       const cfg = getConfig();
       const app = opts.app ?? cfg.app;
@@ -23,13 +22,11 @@ export const coverageCommand = new Command("coverage")
         process.exit(1);
       }
 
-      const db = await getDb();
-      const nodes = await listNodes(db, { app });
-      const edges = await listEdges(db);
+      const nodes = await client.listNodes({ app });
+      const edges = await client.listEdges();
 
       if (nodes.length === 0) {
         info(`No nodes found for app: ${app}`);
-        await closeDb();
         return;
       }
 
@@ -94,11 +91,10 @@ export const coverageCommand = new Command("coverage")
       console.log(
         chalk.dim(`\n  SourceFile nodes: ${sourceFiles.length}  |  IMPLEMENTED_IN edges: ${implementedInCount}`)
       );
-
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
-import { getDb, closeDb } from "../../db/client.js";
+import { getClient } from "../../client/factory.js";
 import { discoverSpecFiles } from "../../spec/discovery.js";
 import { parseSpecFile } from "../../spec/parser.js";
 import { resolveSpecs, resolveSpecsOffline } from "../../spec/resolver.js";
@@ -22,6 +22,7 @@ const ingestCmd = new Command("ingest")
     const apply = Boolean(opts.enrich || opts.apply);
     const enrich = Boolean(opts.enrich);
 
+    const client = await getClient();
     try {
       // Discover and parse
       const discovered = discoverSpecFiles(opts.specsDir);
@@ -62,14 +63,13 @@ const ingestCmd = new Command("ingest")
 
       info(`Parsed ${allSpecs.length} spec file(s)`);
 
-      // Resolve references (with DB fallback)
-      const db = await getDb();
-      const resolved = await resolveSpecs(allSpecs, db);
+      // Resolve references (with client fallback)
+      const resolved = await resolveSpecs(allSpecs, client);
 
       info(`Resolved ${resolved.nodes.length} node(s), ${resolved.edges.length} edge(s)`);
 
       // Sync to DB
-      const results = await runSpecSync(db, resolved, apply);
+      const results = await runSpecSync(client, resolved, apply);
       printSpecSyncResults(results, resolved.warnings, apply);
 
       // Enrich YAML files with generated IDs
@@ -85,12 +85,11 @@ const ingestCmd = new Command("ingest")
           info("No new IDs to enrich (all already populated).");
         }
       }
-
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });
 
@@ -159,13 +158,12 @@ const exportCmd = new Command("export")
   .requiredOption("--app <app>", "Application name to export")
   .option("--output <path>", "Output directory", "./specs")
   .action(async (opts) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
-
       heading(`Spec Export: ${opts.app}`);
 
       const outputDir = `${opts.output}/${opts.app}`;
-      const results = await exportToSpec(db, { app: opts.app, outputDir });
+      const results = await exportToSpec(client, { app: opts.app, outputDir });
 
       if (results.files.length === 0) {
         warn("No nodes found for this app.");
@@ -175,12 +173,11 @@ const exportCmd = new Command("export")
           info(f);
         }
       }
-
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });
 

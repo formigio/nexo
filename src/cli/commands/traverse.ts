@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { getDb, closeDb } from "../../db/client.js";
-import { traverse } from "../../db/queries.js";
+import { getClient } from "../../client/factory.js";
 import { heading, error, info, nodeLabel, edgeLabel } from "../output.js";
 import chalk from "chalk";
 
@@ -10,13 +9,13 @@ export const traverseCommand = new Command("traverse")
   .option("-d, --depth <n>", "Traversal depth", "2")
   .option("-e, --edge-types <types>", "Comma-separated edge types to follow")
   .action(async (id, opts) => {
+    const client = await getClient();
     try {
-      const db = await getDb();
       const edgeTypes = opts.edgeTypes
         ? opts.edgeTypes.split(",").map((t: string) => t.trim())
         : undefined;
 
-      const result = await traverse(db, id, {
+      const result = await client.traverse(id, {
         depth: parseInt(opts.depth, 10),
         edgeTypes,
       });
@@ -42,11 +41,10 @@ export const traverseCommand = new Command("traverse")
       console.log(
         chalk.dim(`\n${result.nodes.length} node(s), ${result.edges.length} edge(s)`)
       );
-
-      await closeDb();
     } catch (err: any) {
       error(err.message);
-      await closeDb();
       process.exit(1);
+    } finally {
+      await client.close();
     }
   });

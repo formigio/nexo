@@ -23,6 +23,12 @@ export const NexoConfigSchema = z.object({
       host: z.string().optional(),
     })
     .optional(),
+  api: z
+    .object({
+      url: z.string().optional(),
+      key: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type NexoConfig = z.infer<typeof NexoConfigSchema>;
