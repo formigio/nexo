@@ -150,41 +150,27 @@ nexo:list_features(app, status?) → Features by status
 
 ## Deployment Architecture
 
-### Phase 1: Local Development
+### Local Development
 
 ```
-SurrealDB (local, file-backed or in-memory)
+SurrealDB (Docker, file-backed)
   ↕
-CLI tool (`nexo`)
+CLI / MCP Server (DbGraphClient, direct connection)
   ↕
-Developer's terminal
+Developer's terminal / Claude Code
 ```
 
-SurrealDB runs locally via Docker or direct binary. No cloud infrastructure needed.
+SurrealDB runs in Docker via Compose or Warden. CLI connects directly. No auth needed.
 
-### Phase 2: Shared Instance
+### Production Deployment
 
-```
-SurrealDB (cloud or self-hosted, TLS + auth)
-  ↕
-MCP Server (Node.js, runs alongside Claude Code)
-  ↕
-CLI + Claude Code
-```
-
-A single SurrealDB instance accessible over the network. MCP server connects to it.
-
-### Phase 3: Production
+For production, deploy the API behind a reverse proxy with authentication. The `GraphClient` abstraction means the CLI and MCP server work identically against a local or remote API — just set `NEXO_API_URL`:
 
 ```
-SurrealDB Cloud (or self-hosted on AWS)
-  ↕
-API Gateway (REST + WebSocket)
-  ↕
-MCP Server | CLI | Web UI
+CLI / MCP  ──→  HttpGraphClient  ──→  API Server  ──→  SurrealDB
 ```
 
-Full stack with authentication, rate limiting, and a web interface.
+See the `infra/` directory for an example AWS SAM template.
 
 ## Data Flow: Node Creation
 
@@ -235,8 +221,8 @@ Full stack with authentication, rate limiting, and a web interface.
 
 ## Security Considerations
 
-- **Authentication:** SurrealDB supports namespace/database-level auth. MCP server and REST API add application-level auth.
-- **Multi-tenancy:** Applications are isolated by SurrealDB namespace. Cross-app queries are explicitly opted into.
+- **Authentication:** SurrealDB supports namespace/database-level auth. The API layer can add application-level auth (JWT, API key, etc.) when deployed to production.
+- **Multi-tenancy:** Applications are isolated by `app` field on nodes. Cross-app queries are explicitly opted into.
 - **PII:** DataField nodes can be flagged `pii: true`. Impact analysis highlights when changes touch PII fields.
 - **Audit trail:** All modifications are timestamped and attributed. SurrealDB's event system can log all changes.
 

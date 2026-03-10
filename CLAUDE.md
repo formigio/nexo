@@ -104,10 +104,41 @@ export NEXO_DB_URL=https://db.nexo.test
 
 - **Node >= 20**, ESM (`"type": "module"` in package.json)
 - **TypeScript** targeting ES2022, `NodeNext` module resolution
-- **SurrealDB v3** running in Docker (Docker Compose: `localhost:8000`, Warden: `https://db.nexo.test`)
+- **SurrealDB v3** running in Docker (local)
 
-Environment variables for DB config (all have defaults):
-`NEXO_DB_URL`, `NEXO_DB_NS`, `NEXO_DB_DB`, `NEXO_DB_USER`, `NEXO_DB_PASS`
+### Two operating modes
+
+The CLI and MCP server can talk to the graph in two ways:
+
+| Mode | When | How it connects |
+|------|------|-----------------|
+| **HTTP client** | `NEXO_API_URL` is set (or `api.url` in config) | CLI/MCP → HTTP API (remote or local) |
+| **Direct DB** | No API URL configured | CLI/MCP → SurrealDB directly |
+
+**HTTP client mode** (remote API):
+```bash
+export NEXO_API_URL=https://your-api-host.com
+export NEXO_API_KEY=<your-api-key>
+nexo node list --app todo     # talks to API server
+```
+
+**Direct DB mode** (local dev):
+```bash
+export NEXO_DB_URL=https://db.nexo.test   # Warden
+# or: defaults to http://localhost:8000    # Docker Compose
+nexo node list --app todo                  # talks to SurrealDB directly
+```
+
+Config can also be set in `~/.nexo/config.json`:
+```json
+{ "api": { "url": "https://your-api-host.com", "key": "..." } }
+```
+
+### Environment variables
+
+**DB config** (direct mode, all have defaults): `NEXO_DB_URL`, `NEXO_DB_NS`, `NEXO_DB_DB`, `NEXO_DB_USER`, `NEXO_DB_PASS`
+
+**API config** (HTTP client mode): `NEXO_API_URL`, `NEXO_API_KEY`
 
 ## Architecture
 
@@ -127,7 +158,13 @@ src/schema/         Zod schemas + ID generation (no DB dependency)
     types.ts        Node/Edge types, per-type props schemas, edge constraints
     ids.ts          Deterministic ID generation: generateNodeId(type, name)
 
-src/db/             SurrealDB operations (all take a Surreal instance)
+src/client/         GraphClient abstraction layer
+    types.ts        GraphClient interface + filter/update types
+    factory.ts      getClient() — returns HttpGraphClient or DbGraphClient
+    http-client.ts  HTTP API implementation (used when api.url is configured)
+    db-client.ts    Direct SurrealDB implementation (local dev fallback)
+
+src/db/             SurrealDB operations (used by DbGraphClient and server routes)
     client.ts       Connection management: getDb(), initDb(), closeDb()
     nodes.ts        CRUD for nodes + normalizeNode() for RecordId→string
     edges.ts        CRUD for edges + RELATE-based creation with constraint validation
@@ -145,8 +182,21 @@ src/ingest/         Source code → graph sync pipeline
     sourceMap.ts    Resolves graph node IDs → source file paths on disk
 
 src/mcp-server/     MCP server (stdio transport) exposing graph tools to AI agents
-src/web/            HTTP server for D3v7 force-directed graph visualization
+src/web/            HTTP server (full CRUD API) + D3v7 force-directed graph visualization
 ```
+
+### API-First Architecture
+
+The CLI and MCP server are thin clients that use the `GraphClient` interface:
+
+```
+CLI / MCP  ──→  GraphClient interface  ──→  HttpGraphClient (when api.url set)
+                                        └→  DbGraphClient   (local dev fallback)
+```
+
+**Mode selection**: `getApiConfig()` returns `{url, key}` or `null`. If non-null, `getClient()` returns `HttpGraphClient` (talks to the API over HTTP). Otherwise, it returns `DbGraphClient` (direct SurrealDB connection for local dev).
+
+The API server (`src/web/routes.ts`) always uses direct DB access — it IS the server. It exposes full CRUD: `GET/POST/PUT/DELETE` on `/api/nodes`, `/api/edges`, plus `/api/init`, `/api/traverse/:id`, `/api/impact/:id`, `/api/apps`, etc.
 
 ### Key Patterns
 
@@ -154,6 +204,7 @@ src/web/            HTTP server for D3v7 force-directed graph visualization
 - **Edge constraint validation**: Before creating an edge, `createEdge()` verifies both source and target nodes exist and their types are allowed for that edge type (see `EDGE_CONSTRAINTS` in `types.ts`).
 - **Ingest is dry-run by default**: `nexo ingest` shows what would change; pass `--apply` to write to DB.
 - **All imports use `.js` extension**: Required by NodeNext module resolution (TypeScript compiles `.ts` → `.js` but import paths must already say `.js`).
+- **Dynamic imports in factory**: `getClient()` uses dynamic `import()` so that `surrealdb` is never loaded when using HTTP mode (important for lightweight CLI usage against remote API).
 
 ## CLI Commands
 

@@ -16,6 +16,7 @@ const ingestCmd = new Command("ingest")
   .description("Parse YAML spec files and sync nodes/edges to the graph")
   .option("--specs-dir <path>", "Directory containing spec files", "./specs")
   .option("--app <app>", "Application name filter")
+  .option("--files <globs...>", "Only ingest specific files (glob patterns relative to specs-dir)")
   .option("--apply", "Commit changes to the graph (default: dry-run)")
   .option("--enrich", "Write generated IDs back to YAML files (implies --apply)")
   .action(async (opts) => {
@@ -25,10 +26,25 @@ const ingestCmd = new Command("ingest")
     const client = await getClient();
     try {
       // Discover and parse
-      const discovered = discoverSpecFiles(opts.specsDir);
+      let discovered = discoverSpecFiles(opts.specsDir);
       if (discovered.length === 0) {
         warn(`No *.graph.yaml files found in ${opts.specsDir}`);
         return;
+      }
+
+      // Filter to specific files if --files provided
+      if (opts.files && opts.files.length > 0) {
+        const { resolve } = await import("node:path");
+        const specsDir = resolve(opts.specsDir);
+        const patterns = opts.files as string[];
+        discovered = discovered.filter((f) => {
+          const rel = f.path.startsWith(specsDir) ? f.path.slice(specsDir.length + 1) : f.path;
+          return patterns.some((p) => rel.includes(p) || f.path.includes(p) || f.path.endsWith(p));
+        });
+        if (discovered.length === 0) {
+          warn(`No files matched: ${patterns.join(", ")}`);
+          return;
+        }
       }
 
       heading(`Spec Ingest: ${discovered.length} file(s)`);

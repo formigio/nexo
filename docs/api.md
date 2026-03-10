@@ -1,11 +1,14 @@
 # HTTP API Reference
 
-Nexo exposes a read-only JSON API for querying the specification graph. The API is served by `nexo web` (or the API container in Docker/Warden setups).
+Nexo exposes a full CRUD JSON API for the specification graph. The API is served by `nexo web` (local) or the API container in Docker/Warden setups.
 
-Base URL depends on your setup:
-- **Warden**: `https://nexo.test/api` (via nginx proxy) or `https://app.nexo.test/api`
-- **Docker Compose**: `http://localhost:3001/api`
-- **Local**: `http://localhost:3000/api`
+## Base URL
+
+| Environment | Base URL |
+|-------------|----------|
+| **Warden** | `https://app.nexo.test/api` |
+| **Docker Compose** | `http://localhost:3001/api` |
+| **Local** (`nexo web`) | `http://localhost:3000/api` |
 
 All endpoints return JSON with `Content-Type: application/json`. CORS is enabled for all origins.
 
@@ -454,6 +457,7 @@ All errors return JSON with an `error` field:
 
 | Status | Meaning |
 |--------|---------|
+| 400    | Bad request (validation error, constraint violation) |
 | 404    | Resource not found |
 | 500    | Internal server error |
 
@@ -465,8 +469,8 @@ All responses include permissive CORS headers:
 
 ```
 Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: GET, OPTIONS
-Access-Control-Allow-Headers: Content-Type
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization, x-api-key
 ```
 
 `OPTIONS` requests return `204 No Content` with these headers for preflight support.
