@@ -113,6 +113,7 @@ nexo feature list|scope      Feature queries
 nexo ingest                  Parse source code and sync nodes (--app, --frontend, --backend, --apply)
 nexo coverage                Spec-to-source coverage report (--app)
 nexo lint                    Graph hygiene rules (--app, --rule, --severity)
+nexo spec ingest|validate|export  YAML spec file management
 nexo web                     Start JSON API server (--port, --host, --app)
 ```
 
