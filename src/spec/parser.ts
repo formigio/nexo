@@ -89,6 +89,47 @@ export function parseSpecFile(filePath: string): ParseResult {
         nodes.push(extractNode(entry as Record<string, unknown>, "BusinessRule"));
       }
     }
+    if (data.entities) {
+      for (const entry of data.entities) {
+        const entryObj = entry as Record<string, unknown>;
+        const fields = entryObj.fields as Record<string, unknown>[] | undefined;
+        const { fields: _, ...entityData } = entryObj;
+        const entityNode = extractNode(entityData, "DataEntity");
+        nodes.push(entityNode);
+        if (fields) {
+          for (const field of fields) {
+            const fieldNode = extractNode(field, "DataField");
+            nodes.push(fieldNode);
+            entityNode.inlineEdges.push({
+              edgeType: "HAS_FIELD",
+              targetName: fieldNode.name,
+              targetType: "DataField",
+              reverse: false,
+            });
+          }
+        }
+      }
+    }
+    if (data.resources) {
+      for (const entry of data.resources) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "InfraResource"));
+      }
+    }
+    if (data.states) {
+      for (const entry of data.states) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "UserState"));
+      }
+    }
+    if (data.files) {
+      for (const entry of data.files) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "SourceFile"));
+      }
+    }
+    if (data.fields) {
+      for (const entry of data.fields) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "DataField"));
+      }
+    }
   } else if (data.kind === "data") {
     if (data.entities) {
       for (const entry of data.entities) {
@@ -113,6 +154,11 @@ export function parseSpecFile(filePath: string): ParseResult {
         }
       }
     }
+    if (data.fields) {
+      for (const entry of data.fields) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "DataField"));
+      }
+    }
   } else if (data.kind === "infra") {
     if (data.resources) {
       for (const entry of data.resources) {
@@ -133,6 +179,11 @@ export function parseSpecFile(filePath: string): ParseResult {
     if (data.rules) {
       for (const entry of data.rules) {
         nodes.push(extractNode(entry as Record<string, unknown>, "BusinessRule"));
+      }
+    }
+    if (data.files) {
+      for (const entry of data.files) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "SourceFile"));
       }
     }
   }

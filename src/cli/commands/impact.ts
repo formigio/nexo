@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
-import { heading, error, info, nodeLabel, edgeLabel } from "../output.js";
+import { heading, error, formatError, info, nodeLabel, edgeLabel } from "../output.js";
 import chalk from "chalk";
 
 export const impactCommand = new Command("impact")
@@ -46,10 +46,11 @@ export const impactCommand = new Command("impact")
           `${result.structuralImpacts.length} structural`
         )
       );
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

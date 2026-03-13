@@ -5,16 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.1] - 2026-03-09
-
-### Added
-- `--files` option on `nexo spec ingest` to filter specific files by glob pattern
-
-### Changed
-- Updated API docs to reflect full CRUD support and CORS headers
-- Updated architecture docs with current deployment model and GraphClient abstraction
-- Updated CLAUDE.md with two operating modes, client module layer, and environment variable docs
-
 ## [1.0.0] - 2026-03-03
 
 Initial public release.

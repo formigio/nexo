@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
-import { heading, error, info } from "../output.js";
+import { heading, error, formatError, info } from "../output.js";
 import chalk from "chalk";
 
 /** Node types that represent spec (non-leaf) nodes which should be backed by source files. */
@@ -27,6 +27,7 @@ export const coverageCommand = new Command("coverage")
 
       if (nodes.length === 0) {
         info(`No nodes found for app: ${app}`);
+        await client.close();
         return;
       }
 
@@ -91,10 +92,11 @@ export const coverageCommand = new Command("coverage")
       console.log(
         chalk.dim(`\n  SourceFile nodes: ${sourceFiles.length}  |  IMPLEMENTED_IN edges: ${implementedInCount}`)
       );
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

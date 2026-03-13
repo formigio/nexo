@@ -162,15 +162,32 @@ Developer's terminal / Claude Code
 
 SurrealDB runs in Docker via Compose or Warden. CLI connects directly. No auth needed.
 
-### Production Deployment
-
-For production, deploy the API behind a reverse proxy with authentication. The `GraphClient` abstraction means the CLI and MCP server work identically against a local or remote API — just set `NEXO_API_URL`:
+### AWS Production (specs.journeyjuntos.com)
 
 ```
-CLI / MCP  ──→  HttpGraphClient  ──→  API Server  ──→  SurrealDB
+Browser ──→ CloudFront ──┬── /* ──→ S3 (web console SPA)
+                         └── /api/* ──→ API Gateway ──→ Lambda
+                                                          ├─ Auth: Cognito JWT or API key + IP allowlist
+                                                          ├─ EC2 waker (starts SurrealDB if idle-stopped)
+                                                          └─ routes.ts ──→ SurrealDB (EC2, EBS persistence)
+
+CLI / MCP ──→ HttpGraphClient ──→ CloudFront ──→ same Lambda path (API key auth)
 ```
 
-See the `infra/` directory for an example AWS SAM template.
+**Key components:**
+- **CloudFront** — Routes SPA traffic to S3, API traffic to API Gateway. CloudFront Function rewrites non-file URIs to `index.html` for SPA routing (only on the S3 origin, not `/api/*`).
+- **S3** — Hosts the built web console. Private bucket, accessed via OAC.
+- **Lambda** — Dual auth (JWT for browsers, API key for CLI/MCP), wakes idle EC2, proxies to `routes.ts`.
+- **EC2 (Auto Scaling Group)** — Runs SurrealDB with persistent EBS volume. Idle checker Lambda scales to 0 after inactivity.
+- **Cognito** — User pool for browser auth, OAuth2 PKCE flow.
+- **SSM Parameter Store** — Secrets (`/nexo/api-key`, `/nexo/db-pass`) as SecureString.
+- **Route 53 + ACM** — DNS and TLS for `specs.journeyjuntos.com`.
+
+**Deploy sequence:**
+```bash
+cd infra && sam build && sam deploy         # infra + Lambda code
+scripts/deploy-console.sh --invalidate      # web console to S3
+```
 
 ## Data Flow: Node Creation
 
@@ -221,7 +238,9 @@ See the `infra/` directory for an example AWS SAM template.
 
 ## Security Considerations
 
-- **Authentication:** SurrealDB supports namespace/database-level auth. The API layer can add application-level auth (JWT, API key, etc.) when deployed to production.
+- **Authentication (AWS):** Dual auth — Cognito JWT for browser users (OAuth2 PKCE flow), API key + IP CIDR allowlist for CLI/MCP. JWT auth skips IP allowlist since CloudFront masks client IPs.
+- **Authentication (local):** No auth — local dev stack is open on localhost.
+- **Secrets:** API key and DB password stored in AWS SSM Parameter Store as SecureString. Lambda fetches at runtime with module-level caching. Never in source code or config files.
 - **Multi-tenancy:** Applications are isolated by `app` field on nodes. Cross-app queries are explicitly opted into.
 - **PII:** DataField nodes can be flagged `pii: true`. Impact analysis highlights when changes touch PII fields.
 - **Audit trail:** All modifications are timestamped and attributed. SurrealDB's event system can log all changes.

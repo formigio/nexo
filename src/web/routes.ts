@@ -274,9 +274,11 @@ export function createHandler(db: Surreal, defaultApp?: string) {
         // Fetch all member nodes
         let members: typeof feature[] = [];
         if (memberIds.length > 0) {
+          const recordIds = memberIds
+            .map((mid) => `type::record("node", "${mid}")`)
+            .join(", ");
           const [results] = await db.query<[any[]]>(
-            `SELECT * FROM node WHERE <string> id IN $ids`,
-            { ids: memberIds },
+            `SELECT * FROM node WHERE id IN [${recordIds}]`
           );
           members = (results ?? []).map(normalizeNode);
         }
@@ -336,10 +338,10 @@ export function createHandler(db: Surreal, defaultApp?: string) {
       if (method === "GET" && pathname === "/api/nodes") {
         const ids = url.searchParams.getAll("ids");
         if (ids.length > 0) {
-          // Batch fetch by IDs (parameterized to prevent injection)
+          // Batch fetch by IDs
+          const recordIds = ids.map((id) => `type::record("node", "${id}")`).join(", ");
           const [results] = await db.query<[any[]]>(
-            `SELECT * FROM node WHERE <string> id IN $ids`,
-            { ids },
+            `SELECT * FROM node WHERE id IN [${recordIds}]`
           );
           const nodes = (results ?? []).map(normalizeNode);
           json(res, nodes);

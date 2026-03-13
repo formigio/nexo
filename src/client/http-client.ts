@@ -47,7 +47,15 @@ export class HttpGraphClient implements GraphClient {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error((data as any).error ?? `HTTP ${res.status}`);
+      const rawError = (data as any).error;
+      const msg = typeof rawError === "string"
+        ? rawError
+        : Array.isArray(rawError)
+          ? rawError.map((i: any) => `${i.path?.join(".") ?? ""}: ${i.message}`).join("; ")
+          : rawError != null
+            ? JSON.stringify(rawError)
+            : `HTTP ${res.status}`;
+      throw new Error(msg);
     }
 
     return res.json() as Promise<T>;

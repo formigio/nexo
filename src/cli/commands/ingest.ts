@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
 import { runSync, printSyncResults } from "../../ingest/sync.js";
-import { error } from "../output.js";
+import { error, formatError } from "../output.js";
 
 export const ingestCommand = new Command("ingest")
   .description("Parse source code and sync spec nodes to the graph")
@@ -36,10 +36,10 @@ export const ingestCommand = new Command("ingest")
       });
 
       printSyncResults(results, Boolean(opts.apply));
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

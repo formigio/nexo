@@ -12,7 +12,7 @@ import { registerAppTools } from "./tools/apps.js";
 
 const server = new McpServer({
   name: "nexo",
-  version: "1.1.0",
+  version: "1.0.0",
 });
 
 let client: GraphClient;

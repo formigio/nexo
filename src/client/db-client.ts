@@ -24,6 +24,7 @@ import {
   traverse as dbTraverse,
   impactAnalysis as dbImpactAnalysis,
 } from "../db/queries.js";
+import { initDb } from "../db/client.js";
 import { runMigrations } from "../db/migrate.js";
 
 export class DbGraphClient implements GraphClient {
@@ -87,7 +88,8 @@ export class DbGraphClient implements GraphClient {
   }
 
   async init(): Promise<string[]> {
-    return runMigrations(this.db);
+    const db = await initDb();
+    return runMigrations(db);
   }
 
   async close(): Promise<void> {

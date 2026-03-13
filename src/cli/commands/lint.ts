@@ -3,7 +3,7 @@ import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
 import { runLint } from "../../lint/runner.js";
 import type { Severity, Category } from "../../lint/types.js";
-import { heading, error, info } from "../output.js";
+import { heading, error, formatError, info } from "../output.js";
 import chalk from "chalk";
 
 const SEVERITY_ICON: Record<Severity, string> = {
@@ -37,6 +37,7 @@ export const lintCommand = new Command("lint")
 
       if (opts.json) {
         console.log(JSON.stringify(report, null, 2));
+        await client.close();
         return;
       }
 
@@ -87,10 +88,11 @@ export const lintCommand = new Command("lint")
       } else {
         console.log(`  ${parts.join(chalk.dim(", "))}`);
       }
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

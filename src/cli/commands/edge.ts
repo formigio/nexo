@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
 import { EDGE_TYPES } from "../../schema/types.js";
-import { heading, success, error, edgeTable } from "../output.js";
+import { heading, success, error, formatError, edgeTable } from "../output.js";
 
 export const edgeCommand = new Command("edge")
   .description("Manage edges in the spec graph");
@@ -30,11 +30,11 @@ edgeCommand
 
       const edge = await client.createEdge({ type, from, to, metadata });
       success(`Created edge: ${from} ─${type}→ ${to}`);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -55,11 +55,11 @@ edgeCommand
 
       heading("Edges");
       edgeTable(edges);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -71,10 +71,10 @@ edgeCommand
     try {
       await client.deleteEdge(id);
       success(`Deleted edge: ${id}`);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

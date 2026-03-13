@@ -25,24 +25,29 @@ export const INLINE_EDGES: Partial<Record<NodeType, Record<string, InlineEdgeDef
     renders: { edgeType: "RENDERS", targetType: "Component" },
     child_of: { edgeType: "CHILD_OF", targetType: "Screen" },
     requires_state: { edgeType: "REQUIRES_STATE", targetType: "UserState" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   Component: {
     renders_on: { edgeType: "RENDERS", targetType: "Screen", reverse: true },
     triggers: { edgeType: "TRIGGERS", targetType: "UserAction" },
     displays: { edgeType: "DISPLAYS", targetType: "DataField" },
     accepts_input: { edgeType: "ACCEPTS_INPUT", targetType: "DataField" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   UserAction: {
     calls: { edgeType: "CALLS", targetType: "APIEndpoint" },
     navigates_to: { edgeType: "NAVIGATES_TO", targetType: "Screen" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   APIEndpoint: {
     reads: { edgeType: "READS", targetType: "DataEntity" },
     writes: { edgeType: "WRITES", targetType: "DataEntity" },
     hosted_on: { edgeType: "HOSTED_ON", targetType: "InfraResource" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   DataEntity: {
     stored_in: { edgeType: "STORED_IN", targetType: "InfraResource" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
     // 'fields' is handled specially as nested nodes, not as a simple edge ref
   },
   DataField: {
@@ -52,6 +57,14 @@ export const INLINE_EDGES: Partial<Record<NodeType, Record<string, InlineEdgeDef
     validates: { edgeType: "VALIDATES", targetType: "DataField" },
     constrains: { edgeType: "CONSTRAINS", targetType: "UserAction" },
     authorizes: { edgeType: "AUTHORIZES", targetType: "APIEndpoint" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
+  },
+  InfraResource: {
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
+  },
+  UserState: {
+    transitions_to: { edgeType: "TRANSITIONS_TO", targetType: "UserState" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   Feature: {
     depends_on: { edgeType: "DEPENDS_ON", targetType: "Feature" },
@@ -69,6 +82,8 @@ export const SECTION_NODE_TYPE: Record<string, NodeType> = {
   resources: "InfraResource",
   states: "UserState",
   feature: "Feature",
+  files: "SourceFile",
+  fields: "DataField",
 };
 
 /** Load order for file kinds (dependencies first) */

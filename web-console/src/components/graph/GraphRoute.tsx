@@ -1,13 +1,17 @@
 import { useState, useRef, useMemo, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchGraph } from '@/api/graph'
 import { fetchTraversal } from '@/api/traversal'
 import { fetchFeatureScope } from '@/api/features'
+import { deleteEdgeApi } from '@/api/edges'
 import { ForceGraph } from '@/components/shared/ForceGraph'
 import { GraphContextMenu } from './GraphContextMenu'
+import { CreateEdgeDialog } from '@/components/create-edge/CreateEdgeDialog'
+import { DeleteNodeDialog } from '@/components/delete-node/DeleteNodeDialog'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { ErrorState } from '@/components/shared/ErrorState'
+import { useToast } from '@/hooks/useToast'
 import type { ForceGraphHandle } from '@/components/shared/ForceGraph'
 import type { Node, NodeType } from '@/lib/types'
 import { NODE_TYPE_COLORS, NODE_TYPE_LABELS } from '@/lib/constants'
@@ -43,7 +47,11 @@ export function GraphRoute({ app }: GraphRouteProps) {
   const nodeId = searchParams.get('node')
   const featureId = searchParams.get('feature')
   const graphRef = useRef<ForceGraphHandle>(null)
+  const queryClient = useQueryClient()
+  const toast = useToast()
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [edgeDialogNode, setEdgeDialogNode] = useState<Node | null>(null)
+  const [deleteDialogNode, setDeleteDialogNode] = useState<Node | null>(null)
 
   const [activeTypes, setActiveTypes] = useState<Set<NodeType>>(
     () => new Set(ALL_NODE_TYPES.filter((t) => !DEFAULT_HIDDEN.has(t))),
@@ -127,6 +135,37 @@ export function GraphRoute({ app }: GraphRouteProps) {
     setContextMenu(null)
   }, [])
 
+  const handleEditNode = useCallback(() => {
+    if (!contextMenu) return
+    navigate(`/nodes/${contextMenu.node.id}/edit`)
+    setContextMenu(null)
+  }, [contextMenu, navigate])
+
+  const handleAddEdge = useCallback(() => {
+    if (!contextMenu) return
+    setEdgeDialogNode(contextMenu.node)
+    setContextMenu(null)
+  }, [contextMenu])
+
+  const handleDeleteNode = useCallback(() => {
+    if (!contextMenu) return
+    setDeleteDialogNode(contextMenu.node)
+    setContextMenu(null)
+  }, [contextMenu])
+
+  const handleEdgeDelete = useCallback(
+    async (edgeId: string) => {
+      try {
+        await deleteEdgeApi(edgeId)
+        toast.success('Edge deleted')
+        queryClient.invalidateQueries({ queryKey: ['graph-view'] })
+      } catch (err) {
+        toast.error((err as Error).message || 'Failed to delete edge')
+      }
+    },
+    [queryClient, toast],
+  )
+
   if (isLoading) return <LoadingState message="Loading graph..." />
   if (error) return <ErrorState message={(error as Error).message} />
   if (!data) return null
@@ -182,6 +221,7 @@ export function GraphRoute({ app }: GraphRouteProps) {
           highlightNodeId={data.highlightId}
           activeTypes={activeTypes}
           onNodeClick={handleNodeClick}
+          onEdgeDelete={handleEdgeDelete}
         />
         {contextMenu && (
           <GraphContextMenu
@@ -191,10 +231,33 @@ export function GraphRoute({ app }: GraphRouteProps) {
             onDrillDown={handleDrillDown}
             onGoBack={handleGoBack}
             onNavigate={handleNavigate}
+            onEditNode={handleEditNode}
+            onAddEdge={handleAddEdge}
+            onDeleteNode={handleDeleteNode}
             onDismiss={handleDismiss}
           />
         )}
       </div>
+
+      <CreateEdgeDialog
+        isOpen={!!edgeDialogNode}
+        sourceNode={edgeDialogNode}
+        onClose={() => setEdgeDialogNode(null)}
+        onEdgeCreated={() => {
+          setEdgeDialogNode(null)
+          queryClient.invalidateQueries({ queryKey: ['graph-view'] })
+        }}
+      />
+
+      <DeleteNodeDialog
+        isOpen={!!deleteDialogNode}
+        node={deleteDialogNode}
+        onClose={() => setDeleteDialogNode(null)}
+        onDeleted={() => {
+          setDeleteDialogNode(null)
+          queryClient.invalidateQueries({ queryKey: ['graph-view'] })
+        }}
+      />
     </div>
   )
 }

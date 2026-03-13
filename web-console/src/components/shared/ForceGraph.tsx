@@ -24,6 +24,7 @@ interface ForceGraphProps {
   edges: Edge[]
   highlightNodeId?: string
   onNodeClick?: (node: Node, position: { x: number; y: number }) => void
+  onEdgeDelete?: (edgeId: string) => void
   activeTypes?: Set<NodeType>
 }
 
@@ -39,10 +40,16 @@ interface D3Link extends d3.SimulationLinkDatum<D3Node> {
 }
 
 export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
-  function ForceGraph({ nodes, edges, highlightNodeId, onNodeClick, activeTypes }, ref) {
+  function ForceGraph({ nodes, edges, highlightNodeId, onNodeClick, onEdgeDelete, activeTypes }, ref) {
     const svgRef = useRef<SVGSVGElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const simRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null)
+    const prevNodeIdsRef = useRef<Set<string>>(new Set())
+    const prevEdgeIdsRef = useRef<Set<string>>(new Set())
+    const edgeHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const edgeLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const onEdgeDeleteRef = useRef(onEdgeDelete)
+    onEdgeDeleteRef.current = onEdgeDelete
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
 
@@ -113,6 +120,22 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
           target: e.out,
         }))
 
+      // Detect data mutation vs filter/resize change
+      const currentNodeIds = new Set(nodes.map((n) => n.id))
+      const currentEdgeIds = new Set(edges.map((e) => e.id))
+      const prevNodes = prevNodeIdsRef.current
+      const prevEdges = prevEdgeIdsRef.current
+      const isDataMutation =
+        prevNodes.size > 0 &&
+        (currentNodeIds.size !== prevNodes.size ||
+          currentEdgeIds.size !== prevEdges.size ||
+          [...currentNodeIds].some((id) => !prevNodes.has(id)) ||
+          [...prevNodes].some((id) => !currentNodeIds.has(id)) ||
+          [...currentEdgeIds].some((id) => !prevEdges.has(id)) ||
+          [...prevEdges].some((id) => !currentEdgeIds.has(id)))
+      prevNodeIdsRef.current = currentNodeIds
+      prevEdgeIdsRef.current = currentEdgeIds
+
       // Clear previous
       svg.selectAll('*').remove()
 
@@ -129,26 +152,183 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       // Click background to deselect
       svg.on('click', () => setSelectedId(null))
 
-      // Links
-      const linkSel = container
-        .append('g')
-        .selectAll<SVGLineElement, D3Link>('line')
-        .data(visibleLinks)
+      // Links group
+      const linkGroup = container.append('g').attr('class', 'links')
+
+      // Visible edge lines
+      const linkSel = linkGroup
+        .selectAll<SVGLineElement, D3Link>('line.edge-line')
+        .data(visibleLinks, (d) => d.id)
         .enter()
         .append('line')
+        .attr('class', 'edge-line')
         .attr('stroke', (d) => EDGE_TYPE_COLORS[d.type] || '#444')
         .attr('stroke-width', 1)
         .attr('stroke-opacity', 0.35)
 
+      // Invisible wider hit areas for hover targeting
+      const hitSel = linkGroup
+        .selectAll<SVGLineElement, D3Link>('line.edge-hit')
+        .data(visibleLinks, (d) => d.id)
+        .enter()
+        .append('line')
+        .attr('class', 'edge-hit')
+        .attr('stroke', 'transparent')
+        .attr('stroke-width', 12)
+        .style('cursor', 'pointer')
+
+      // Edge delete overlay — single reusable group
+      const edgeOverlay = container.append('g')
+        .attr('class', 'edge-delete-overlay')
+        .style('display', 'none')
+        .style('pointer-events', 'all')
+
+      // Delete circle + X
+      edgeOverlay.append('circle')
+        .attr('r', 10)
+        .attr('fill', '#161b22')
+        .attr('stroke', '#30363d')
+        .attr('stroke-width', 1)
+        .attr('class', 'delete-circle')
+        .style('cursor', 'pointer')
+
+      edgeOverlay.append('line')
+        .attr('x1', -4).attr('y1', -4).attr('x2', 4).attr('y2', 4)
+        .attr('stroke', '#8b949e').attr('stroke-width', 1.5).attr('stroke-linecap', 'round')
+        .style('pointer-events', 'none')
+      edgeOverlay.append('line')
+        .attr('x1', 4).attr('y1', -4).attr('x2', -4).attr('y2', 4)
+        .attr('stroke', '#8b949e').attr('stroke-width', 1.5).attr('stroke-linecap', 'round')
+        .style('pointer-events', 'none')
+
+      // Confirm popover (foreignObject)
+      const confirmFO = container.append('foreignObject')
+        .attr('class', 'edge-confirm-fo')
+        .attr('width', 120).attr('height', 28)
+        .style('display', 'none')
+        .style('overflow', 'visible')
+
+      const confirmDiv = confirmFO.append('xhtml:div')
+        .style('display', 'flex')
+        .style('align-items', 'center')
+        .style('gap', '4px')
+        .style('background', '#161b22')
+        .style('border', '1px solid #30363d')
+        .style('border-radius', '6px')
+        .style('padding', '3px 8px')
+        .style('font-size', '11px')
+        .style('white-space', 'nowrap')
+
+      confirmDiv.append('xhtml:span')
+        .style('color', '#8b949e')
+        .text('Delete?')
+
+      let activeEdgeId: string | null = null
+
+      const hideOverlay = () => {
+        edgeOverlay.style('display', 'none')
+        confirmFO.style('display', 'none')
+        activeEdgeId = null
+        // Reset edge highlight
+        linkSel.attr('stroke-width', 1)
+      }
+
+      confirmDiv.append('xhtml:button')
+        .style('background', 'none').style('border', 'none').style('color', '#f85149')
+        .style('cursor', 'pointer').style('font-size', '11px').style('font-weight', '600')
+        .style('padding', '0 2px')
+        .text('Yes')
+        .on('click', () => {
+          if (activeEdgeId && onEdgeDeleteRef.current) onEdgeDeleteRef.current(activeEdgeId)
+          hideOverlay()
+        })
+
+      confirmDiv.append('xhtml:button')
+        .style('background', 'none').style('border', 'none').style('color', '#8b949e')
+        .style('cursor', 'pointer').style('font-size', '11px').style('padding', '0 2px')
+        .text('No')
+        .on('click', hideOverlay)
+
+      // Overlay hover — keep it visible while mouse is on it
+      edgeOverlay
+        .on('mouseenter', () => {
+          if (edgeLeaveTimerRef.current) { clearTimeout(edgeLeaveTimerRef.current); edgeLeaveTimerRef.current = null }
+        })
+        .on('mouseleave', () => {
+          edgeLeaveTimerRef.current = setTimeout(hideOverlay, 200)
+        })
+        .on('click', () => {
+          // Show confirm popover, hide the X button
+          if (!activeEdgeId) return
+          edgeOverlay.style('display', 'none')
+          const overlayTransform = edgeOverlay.attr('transform')
+          const match = overlayTransform?.match(/translate\(([^,]+),([^)]+)\)/)
+          if (match) {
+            confirmFO
+              .attr('x', parseFloat(match[1]) - 60)
+              .attr('y', parseFloat(match[2]) - 14)
+              .style('display', null)
+          }
+        })
+
+      // Confirm FO hover
+      confirmFO
+        .on('mouseenter', () => {
+          if (edgeLeaveTimerRef.current) { clearTimeout(edgeLeaveTimerRef.current); edgeLeaveTimerRef.current = null }
+        })
+        .on('mouseleave', () => {
+          edgeLeaveTimerRef.current = setTimeout(hideOverlay, 200)
+        })
+
+      // Edge hover handlers
+      hitSel
+        .on('mouseenter', function (_event, d) {
+          if (edgeLeaveTimerRef.current) { clearTimeout(edgeLeaveTimerRef.current); edgeLeaveTimerRef.current = null }
+          // Thicken the visible line
+          linkSel.filter((l) => l.id === d.id).attr('stroke-width', 3)
+
+          edgeHoverTimerRef.current = setTimeout(() => {
+            const src = d.source as D3Node
+            const tgt = d.target as D3Node
+            const mx = ((src.x || 0) + (tgt.x || 0)) / 2
+            const my = ((src.y || 0) + (tgt.y || 0)) / 2
+            activeEdgeId = d.id
+            edgeOverlay
+              .attr('transform', `translate(${mx},${my})`)
+              .style('display', null)
+            confirmFO.style('display', 'none')
+          }, 200)
+        })
+        .on('mouseleave', function (_event, d) {
+          if (edgeHoverTimerRef.current) { clearTimeout(edgeHoverTimerRef.current); edgeHoverTimerRef.current = null }
+          // Reset line width after delay (allow mouse to reach overlay)
+          edgeLeaveTimerRef.current = setTimeout(() => {
+            linkSel.filter((l) => l.id === d.id).attr('stroke-width', 1)
+            hideOverlay()
+          }, 300)
+        })
+
+      // Hover style on delete circle
+      edgeOverlay.select('.delete-circle')
+        .on('mouseenter', function () {
+          d3.select(this).attr('fill', '#f85149').attr('stroke', '#f85149')
+          edgeOverlay.selectAll('line').attr('stroke', '#fff')
+        })
+        .on('mouseleave', function () {
+          d3.select(this).attr('fill', '#161b22').attr('stroke', '#30363d')
+          edgeOverlay.selectAll('line').attr('stroke', '#8b949e')
+        })
+
       // Nodes
-      const nodeSel = container
-        .append('g')
+      const nodeGroup = container.append('g').attr('class', 'node-group')
+      const nodeSel = nodeGroup
         .selectAll<SVGGElement, D3Node>('.node')
-        .data(visibleNodes)
+        .data(visibleNodes, (d) => d.id)
         .enter()
         .append('g')
         .attr('class', 'node')
         .style('cursor', 'pointer')
+        .style('transform-origin', '0 0')
         .on('click', (event, d) => {
           event.stopPropagation()
           setSelectedId(d.id)
@@ -202,6 +382,33 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
         .attr('pointer-events', 'none')
         .text((d) => (d.name.length > 22 ? d.name.slice(0, 20) + '\u2026' : d.name))
 
+      // Enter animations for data mutations
+      if (isDataMutation) {
+        nodeSel
+          .style('transform', 'scale(0)')
+          .style('opacity', '0')
+          .transition()
+          .duration(300)
+          .ease(d3.easeBackOut.overshoot(1.2))
+          .style('transform', 'scale(1)')
+          .style('opacity', '1')
+
+        linkSel
+          .attr('stroke-dasharray', function () {
+            return (this as SVGLineElement).getTotalLength?.() || 100
+          })
+          .attr('stroke-dashoffset', function () {
+            return (this as SVGLineElement).getTotalLength?.() || 100
+          })
+          .transition()
+          .duration(400)
+          .ease(d3.easeLinear)
+          .attr('stroke-dashoffset', 0)
+          .on('end', function () {
+            d3.select(this).attr('stroke-dasharray', null)
+          })
+      }
+
       // Pre-spread nodes
       visibleNodes.forEach((n) => {
         if (n.x == null || n.x === 0) {
@@ -237,6 +444,11 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
           .attr('y1', (d) => (d.source as D3Node).y!)
           .attr('x2', (d) => (d.target as D3Node).x!)
           .attr('y2', (d) => (d.target as D3Node).y!)
+        hitSel
+          .attr('x1', (d) => (d.source as D3Node).x!)
+          .attr('y1', (d) => (d.source as D3Node).y!)
+          .attr('x2', (d) => (d.target as D3Node).x!)
+          .attr('y2', (d) => (d.target as D3Node).y!)
         nodeSel.attr('transform', (d) => `translate(${d.x},${d.y})`)
       })
 
@@ -266,7 +478,7 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       return () => {
         sim.stop()
       }
-    }, [nodes, edges, activeTypes, highlightNodeId, onNodeClick, dimensions])
+    }, [nodes, edges, activeTypes, highlightNodeId, onNodeClick, onEdgeDelete, dimensions])
 
     // Apply highlight/dim classes based on selection
     useEffect(() => {
@@ -276,7 +488,7 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       if (!active) {
         svg.selectAll('.node').style('opacity', null)
         svg.selectAll('.node text').style('fill', '#8b949e')
-        svg.selectAll('line').style('stroke-opacity', 0.35)
+        svg.selectAll('.edge-line').style('stroke-opacity', 0.35)
         return
       }
 
@@ -297,7 +509,7 @@ export const ForceGraph = forwardRef<ForceGraphHandle, ForceGraphProps>(
       svg
         .selectAll<SVGTextElement, D3Node>('.node text')
         .style('fill', (d) => (neighbors.has(d.id) ? '#e1e4e8' : '#8b949e'))
-      svg.selectAll<SVGLineElement, D3Link>('line').style('stroke-opacity', (d) =>
+      svg.selectAll<SVGLineElement, D3Link>('.edge-line').style('stroke-opacity', (d) =>
         highlightEdges.has(d.id) ? 0.9 : 0.05,
       )
     }, [selectedId, highlightNodeId, edges])

@@ -1,0 +1,90 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_auth
+  name: Authentication
+  featureId: "N9"
+  status: deployed
+  priority: P0
+  description: Cognito-based authentication for web console with JWT tokens and silent refresh
+
+components:
+  - id: cmp_auth_provider
+    name: Auth Provider
+    componentType: layout
+    description: React context provider wrapping the app with Cognito auth state and silent token refresh
+
+  - id: cmp_auth_callback
+    name: Auth Callback
+    componentType: navigation
+    description: OAuth2 redirect callback handler that exchanges authorization code for tokens
+
+  - id: cmp_app_switcher
+    name: App Switcher
+    componentType: interactive
+    description: Toolbar dropdown to switch between applications in the graph
+    renders_on:
+      - Welcome
+
+actions:
+  - id: act_login
+    name: Login
+    actionType: navigate
+    inputType: tap
+    description: Redirect to Cognito hosted UI for authentication
+
+  - id: act_logout
+    name: Logout
+    actionType: navigate
+    inputType: tap
+    description: Clear tokens and redirect to login screen
+
+  - id: act_switch_app
+    name: Switch App
+    actionType: navigate
+    inputType: tap
+    description: Change the active application context for all queries
+    calls:
+      - GET /apps
+
+endpoints:
+  - id: api_get_apps
+    name: GET /apps
+    method: GET
+    path: /apps
+    authRequired: true
+    description: List all applications with node counts
+    reads:
+      - Node
+
+  - id: api_get_edges
+    name: GET /edges
+    method: GET
+    path: /edges
+    authRequired: false
+    description: Query edges with optional type, from, and to filters
+    reads:
+      - Edge
+
+  - id: api_get_features
+    name: GET /features
+    method: GET
+    path: /features
+    authRequired: false
+    description: List Feature nodes for an application
+    reads:
+      - Node
+
+  - id: api_post_init
+    name: POST /init
+    method: POST
+    path: /init
+    authRequired: true
+    description: Initialize database namespace, create tables, and run migrations
+    writes:
+      - Node
+      - Edge
+
+edges: []

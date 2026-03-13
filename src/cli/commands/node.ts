@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
 import { getConfig } from "../../config/loader.js";
 import { NODE_TYPES } from "../../schema/types.js";
-import { heading, success, error, nodeDetail, nodeTable, warn } from "../output.js";
+import { heading, success, error, formatError, nodeDetail, nodeTable, warn } from "../output.js";
 
 function parseProps(propStrings: string[]): Record<string, unknown> {
   const props: Record<string, unknown> = {};
@@ -62,11 +62,11 @@ nodeCommand
 
       success(`Created node: ${node.id}`);
       nodeDetail(node);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -79,14 +79,15 @@ nodeCommand
       const node = await client.getNode(id);
       if (!node) {
         warn(`Node not found: ${id}`);
+        await client.close();
         process.exit(1);
       }
       nodeDetail(node);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -107,11 +108,11 @@ nodeCommand
 
       heading("Nodes");
       nodeTable(nodes);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -134,11 +135,11 @@ nodeCommand
       const node = await client.updateNode(id, updates);
       success(`Updated node: ${node.id} (v${node.version})`);
       nodeDetail(node);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -150,10 +151,10 @@ nodeCommand
     try {
       await client.deleteNode(id);
       success(`Deleted node: ${id}`);
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

@@ -7,7 +7,7 @@ import { resolveSpecs, resolveSpecsOffline } from "../../spec/resolver.js";
 import { runSpecSync, printSpecSyncResults } from "../../spec/sync.js";
 import { enrichSpecFile } from "../../spec/enricher.js";
 import { exportToSpec } from "../../spec/exporter.js";
-import { heading, success, error, warn, info } from "../output.js";
+import { heading, success, error, formatError, warn, info } from "../output.js";
 import type { ParsedSpecFile } from "../../spec/types.js";
 
 // ── spec ingest ──────────────────────────────────────────────
@@ -101,11 +101,12 @@ const ingestCmd = new Command("ingest")
           info("No new IDs to enrich (all already populated).");
         }
       }
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -189,11 +190,12 @@ const exportCmd = new Command("export")
           info(f);
         }
       }
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 

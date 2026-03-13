@@ -1,35 +1,18 @@
 #!/usr/bin/env bash
 #
-# Validate Nexo API endpoints + CLI HTTP client mode (read + write)
-#
+# Validate Nexo API endpoints (read + write)
 # Usage: ./scripts/validate-api.sh [BASE_URL]
 #
 # Environment:
 #   NEXO_API_KEY  — API key for remote endpoints (x-api-key header)
 #
-# Examples:
-#   # Against local Docker Compose:
-#   ./scripts/validate-api.sh http://localhost:3001
-#
-#   # Against remote API:
-#   export NEXO_API_KEY=your-api-key
-#   ./scripts/validate-api.sh https://your-api.example.com
-#
 set -euo pipefail
 
-BASE="${1:-http://localhost:3001}"
+BASE="${1:-https://app.nexo.test}"
 API_KEY="${NEXO_API_KEY:-}"
 PASS=0
 FAIL=0
 ERRORS=""
-
-# Resolve CLI binary: prefer npm-linked `nexo`, fall back to dist/
-if command -v nexo &>/dev/null; then
-  CLI="nexo"
-else
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  CLI="node ${SCRIPT_DIR}/../dist/cli/index.js"
-fi
 
 green() { printf "\033[32m✓ %s\033[0m\n" "$1"; }
 red()   { printf "\033[31m✗ %s\033[0m\n" "$1"; }
@@ -286,7 +269,7 @@ CLI_ENV="NEXO_API_URL=$BASE"
 [ -n "$API_KEY" ] && CLI_ENV="$CLI_ENV NEXO_API_KEY=$API_KEY"
 
 # Test with api.url set — CLI should use HttpGraphClient
-CLI_OUT=$(env $CLI_ENV $CLI app list 2>&1)
+CLI_OUT=$(env $CLI_ENV nexo app list 2>&1)
 if echo "$CLI_OUT" | grep -q "$APP"; then
   green "nexo app list (HTTP mode)"
   PASS=$((PASS + 1))
@@ -296,7 +279,7 @@ else
   ERRORS="$ERRORS\n  - nexo app list (HTTP)"
 fi
 
-CLI_OUT=$(env $CLI_ENV $CLI node list --app "$APP" --type Screen 2>&1)
+CLI_OUT=$(env $CLI_ENV nexo node list --app "$APP" --type Screen 2>&1)
 if echo "$CLI_OUT" | grep -q "$SAMPLE_NODE"; then
   green "nexo node list (HTTP mode)"
   PASS=$((PASS + 1))
@@ -306,7 +289,7 @@ else
   ERRORS="$ERRORS\n  - nexo node list (HTTP)"
 fi
 
-CLI_OUT=$(env $CLI_ENV $CLI node get "$SAMPLE_NODE" 2>&1)
+CLI_OUT=$(env $CLI_ENV nexo node get "$SAMPLE_NODE" 2>&1)
 if echo "$CLI_OUT" | grep -q "$SAMPLE_NAME"; then
   green "nexo node get (HTTP mode)"
   PASS=$((PASS + 1))
@@ -316,7 +299,7 @@ else
   ERRORS="$ERRORS\n  - nexo node get (HTTP)"
 fi
 
-CLI_OUT=$(env $CLI_ENV $CLI traverse "$SAMPLE_NODE" 2>&1)
+CLI_OUT=$(env $CLI_ENV nexo traverse "$SAMPLE_NODE" 2>&1)
 if echo "$CLI_OUT" | grep -q "node(s)"; then
   green "nexo traverse (HTTP mode)"
   PASS=$((PASS + 1))
@@ -326,8 +309,8 @@ else
   ERRORS="$ERRORS\n  - nexo traverse (HTTP)"
 fi
 
-CLI_OUT=$(env $CLI_ENV $CLI impact "$SAMPLE_NODE" 2>&1)
-if echo "$CLI_OUT" | grep -qi "impact"; then
+CLI_OUT=$(env $CLI_ENV nexo impact "$SAMPLE_NODE" 2>&1)
+if echo "$CLI_OUT" | grep -q "impact"; then
   green "nexo impact (HTTP mode)"
   PASS=$((PASS + 1))
 else
@@ -337,7 +320,7 @@ else
 fi
 
 # Test write via CLI in HTTP mode
-CLI_OUT=$(env $CLI_ENV $CLI node create Component --app "$APP" --name "CLI HTTP Test" --desc "Created via CLI HTTP mode" --prop componentType=presentational 2>&1)
+CLI_OUT=$(env $CLI_ENV nexo node create Component --app "$APP" --name "CLI HTTP Test" --desc "Created via CLI HTTP mode" --prop componentType=presentational 2>&1)
 if echo "$CLI_OUT" | grep -q "cmp_cli_http_test"; then
   green "nexo node create (HTTP mode)"
   PASS=$((PASS + 1))
@@ -348,7 +331,7 @@ else
 fi
 
 # Cleanup
-env $CLI_ENV $CLI node delete cmp_cli_http_test --force 2>/dev/null || \
+env $CLI_ENV nexo node delete cmp_cli_http_test --force 2>/dev/null || \
   api_curl -X DELETE "$BASE/api/nodes/cmp_cli_http_test" > /dev/null
 
 echo ""

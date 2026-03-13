@@ -1,6 +1,6 @@
 {
   "name": "@formigio/nexo",
-  "version": "1.1.1",
+  "version": "1.0.1",
   "description": "Specification graph system — make your entire app architecture queryable",
   "license": "MIT",
   "author": "Never Behind Group, LLC",
@@ -57,6 +57,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@types/js-yaml": "^4.0.9",
+    "aws-jwt-verify": "^5.1.1",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "js-yaml": "^4.1.1",
@@ -64,7 +65,13 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@aws-sdk/client-auto-scaling": "^3.1001.0",
+    "@aws-sdk/client-cloudwatch": "^3.1001.0",
+    "@aws-sdk/client-ec2": "^3.1001.0",
+    "@aws-sdk/client-ssm": "^3.1002.0",
+    "@types/aws-lambda": "^8.10.161",
     "@types/node": "^22.13.4",
+    "esbuild": "^0.27.3",
     "typescript": "^5.7.3"
   },
   "publishConfig": {

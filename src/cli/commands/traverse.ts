@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
-import { heading, error, info, nodeLabel, edgeLabel } from "../output.js";
+import { heading, error, formatError, info, nodeLabel, edgeLabel } from "../output.js";
 import chalk from "chalk";
 
 export const traverseCommand = new Command("traverse")
@@ -41,10 +41,11 @@ export const traverseCommand = new Command("traverse")
       console.log(
         chalk.dim(`\n${result.nodes.length} node(s), ${result.edges.length} edge(s)`)
       );
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

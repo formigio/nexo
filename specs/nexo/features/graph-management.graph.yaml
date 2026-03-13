@@ -1,0 +1,196 @@
+nexo: "1.0"
+app: nexo
+kind: feature
+
+feature:
+  id: ftr_graph_management
+  name: Graph Management
+  featureId: "N8"
+  status: proposed
+  priority: P0
+  description: In-browser CRUD for nodes and edges — create, edit, and delete graph elements from the web console
+
+screens:
+  - id: scr_node_editor
+    name: Node Editor
+    route: "/nodes/:nodeId/edit"
+    accessLevel: authenticated
+    description: Full-screen form for editing an existing node with type-specific props fields
+
+components:
+  - id: cmp_node_form
+    name: Node Form
+    componentType: interactive
+    description: Create/edit form with type selector, name, description, tags, and dynamic type-specific props fields
+    renders_on:
+      - Node Editor
+    triggers:
+      - Save Node
+
+  - id: cmp_edge_form
+    name: Edge Form
+    componentType: interactive
+    description: Create edge form with type selector, source/target node pickers, and optional metadata
+    triggers:
+      - Create Edge
+
+  - id: cmp_delete_confirmation
+    name: Delete Confirmation
+    componentType: interactive
+    description: Confirmation dialog showing affected edges before deleting a node or edge
+    triggers:
+      - Confirm Delete
+
+  - id: cmp_node_action_menu
+    name: Node Action Menu
+    componentType: interactive
+    description: Contextual action buttons (edit, delete, add edge) shown on node detail views
+    triggers:
+      - Edit Node
+      - Delete Node
+      - Add Edge From Node
+
+  - id: cmp_create_node_dialog
+    name: Create Node Dialog
+    componentType: interactive
+    description: Modal dialog for creating a new node with type selection and inline form
+
+  - id: cmp_create_edge_dialog
+    name: Create Edge Dialog
+    componentType: interactive
+    description: Modal dialog for creating an edge between two nodes with type selector
+
+actions:
+  - id: act_create_node
+    name: Create Node
+    actionType: mutate
+    inputType: form
+    requiresConfirmation: false
+    description: Submit new node creation form
+    calls:
+      - POST /nodes
+
+  - id: act_save_node
+    name: Save Node
+    actionType: mutate
+    inputType: form
+    requiresConfirmation: false
+    description: Submit node edit form to update an existing node
+    calls:
+      - "PUT /nodes/{id}"
+
+  - id: act_delete_node
+    name: Delete Node
+    actionType: mutate
+    inputType: tap
+    requiresConfirmation: true
+    description: Delete a node and all its connected edges
+    calls:
+      - "DELETE /nodes/{id}"
+
+  - id: act_create_edge
+    name: Create Edge
+    actionType: mutate
+    inputType: form
+    requiresConfirmation: false
+    description: Create a typed edge between two nodes
+    calls:
+      - POST /edges
+
+  - id: act_delete_edge
+    name: Delete Edge
+    actionType: mutate
+    inputType: tap
+    requiresConfirmation: true
+    description: Delete an edge
+    calls:
+      - "DELETE /edges/{id}"
+
+  - id: act_edit_node
+    name: Edit Node
+    actionType: navigate
+    inputType: tap
+    description: Open node editor from action menu
+    navigates_to:
+      - Node Editor
+
+  - id: act_add_edge_from_node
+    name: Add Edge From Node
+    actionType: navigate
+    inputType: tap
+    description: Open edge creation dialog pre-filled with source node
+
+  - id: act_confirm_delete
+    name: Confirm Delete
+    actionType: mutate
+    inputType: tap
+    description: Confirm destructive action in the delete confirmation dialog
+
+endpoints:
+  - id: api_post_nodes
+    name: POST /nodes
+    method: POST
+    path: /nodes
+    authRequired: true
+    description: Create a new node with type, name, app, and type-specific props
+    writes:
+      - Node
+
+  - id: api_put_nodes_id
+    name: "PUT /nodes/{id}"
+    method: PUT
+    path: "/nodes/{id}"
+    authRequired: true
+    description: Update an existing node's name, description, tags, or props
+    writes:
+      - Node
+
+  - id: api_delete_nodes_id
+    name: "DELETE /nodes/{id}"
+    method: DELETE
+    path: "/nodes/{id}"
+    authRequired: true
+    description: Delete a node and cascade-delete all connected edges
+    writes:
+      - Node
+      - Edge
+
+  - id: api_post_edges
+    name: POST /edges
+    method: POST
+    path: /edges
+    authRequired: true
+    description: Create a typed edge between two nodes (validates edge constraints)
+    writes:
+      - Edge
+
+  - id: api_delete_edges_id
+    name: "DELETE /edges/{id}"
+    method: DELETE
+    path: "/edges/{id}"
+    authRequired: true
+    description: Delete a single edge
+    writes:
+      - Edge
+
+rules:
+  - id: rul_edge_constraints_must_be_valid
+    name: Edge constraints must be valid
+    ruleType: validation
+    enforcement: server
+    priority: critical
+    description: Source and target node types must be allowed for the edge type per EDGE_CONSTRAINTS
+    constrains:
+      - Create Edge
+
+  - id: rul_required_fields_must_be_provided
+    name: Required fields must be provided
+    ruleType: validation
+    enforcement: client
+    priority: critical
+    description: Node type, name, and app are required; type-specific required props must be filled
+    constrains:
+      - Create Node
+      - Save Node
+
+edges: []

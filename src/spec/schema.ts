@@ -23,6 +23,7 @@ export const ScreenEntrySchema = yamlNodeBase.extend({
   renders: edgeRef,
   child_of: edgeRef,
   requires_state: edgeRef,
+  implemented_in: edgeRef,
 });
 
 export const ComponentEntrySchema = yamlNodeBase.extend({
@@ -35,6 +36,7 @@ export const ComponentEntrySchema = yamlNodeBase.extend({
   triggers: edgeRef,
   displays: edgeRef,
   accepts_input: edgeRef,
+  implemented_in: edgeRef,
 });
 
 export const UserActionEntrySchema = yamlNodeBase.extend({
@@ -44,6 +46,7 @@ export const UserActionEntrySchema = yamlNodeBase.extend({
   // Inline edges
   calls: edgeRef,
   navigates_to: edgeRef,
+  implemented_in: edgeRef,
 });
 
 export const APIEndpointEntrySchema = yamlNodeBase.extend({
@@ -56,6 +59,7 @@ export const APIEndpointEntrySchema = yamlNodeBase.extend({
   reads: edgeRef,
   writes: edgeRef,
   hosted_on: edgeRef,
+  implemented_in: edgeRef,
 });
 
 export const DataFieldEntrySchema = yamlNodeBase.extend({
@@ -77,6 +81,7 @@ export const DataEntityEntrySchema = yamlNodeBase.extend({
   ttl: z.boolean().optional(),
   // Inline edges
   stored_in: edgeRef,
+  implemented_in: edgeRef,
   // Nested DataField nodes
   fields: z.array(DataFieldEntrySchema).optional(),
 });
@@ -90,6 +95,7 @@ export const BusinessRuleEntrySchema = yamlNodeBase.extend({
   validates: edgeRef,
   constrains: edgeRef,
   authorizes: edgeRef,
+  implemented_in: edgeRef,
 });
 
 export const InfraResourceEntrySchema = yamlNodeBase.extend({
@@ -97,12 +103,25 @@ export const InfraResourceEntrySchema = yamlNodeBase.extend({
   service: z.string(),
   resourceId: z.string().optional(),
   environment: z.enum(["dev", "prod", "both"]).optional(),
+  // Inline edges
+  implemented_in: edgeRef,
 });
 
 export const UserStateEntrySchema = yamlNodeBase.extend({
   stateType: z.enum(["auth", "permission", "contextual", "composite"]),
   conditions: z.array(z.string()).optional(),
   isTerminal: z.boolean().optional(),
+  // Inline edges
+  transitions_to: edgeRef,
+  implemented_in: edgeRef,
+});
+
+export const SourceFileEntrySchema = yamlNodeBase.extend({
+  repo: z.string(),
+  relativePath: z.string(),
+  language: z.enum(["jsx", "tsx", "js", "ts", "yaml", "json", "css", "surql", "other"]).optional(),
+  layer: z.enum(["page", "component", "hook", "context", "api-handler", "auth-handler",
+                  "webhook", "scheduled", "config", "utility", "style", "test", "other"]).optional(),
 });
 
 export const FeatureEntrySchema = yamlNodeBase.extend({
@@ -139,12 +158,18 @@ export const FeatureFileSchema = fileBase.extend({
   actions: z.array(UserActionEntrySchema).optional(),
   endpoints: z.array(APIEndpointEntrySchema).optional(),
   rules: z.array(BusinessRuleEntrySchema).optional(),
+  entities: z.array(DataEntityEntrySchema).optional(),
+  resources: z.array(InfraResourceEntrySchema).optional(),
+  states: z.array(UserStateEntrySchema).optional(),
+  files: z.array(SourceFileEntrySchema).optional(),
+  fields: z.array(DataFieldEntrySchema).optional(),
   edges: z.array(ExplicitEdgeSchema).optional(),
 });
 
 export const DataFileSchema = fileBase.extend({
   kind: z.literal("data"),
   entities: z.array(DataEntityEntrySchema).optional(),
+  fields: z.array(DataFieldEntrySchema).optional(),
   edges: z.array(ExplicitEdgeSchema).optional(),
 });
 
@@ -159,6 +184,7 @@ export const SharedFileSchema = fileBase.extend({
   states: z.array(UserStateEntrySchema).optional(),
   components: z.array(ComponentEntrySchema).optional(),
   rules: z.array(BusinessRuleEntrySchema).optional(),
+  files: z.array(SourceFileEntrySchema).optional(),
   edges: z.array(ExplicitEdgeSchema).optional(),
 });
 

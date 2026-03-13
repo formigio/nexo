@@ -9,6 +9,9 @@ interface GraphContextMenuProps {
   onDrillDown: () => void
   onGoBack: () => void
   onNavigate: () => void
+  onEditNode: () => void
+  onAddEdge: () => void
+  onDeleteNode: () => void
   onDismiss: () => void
 }
 
@@ -19,13 +22,16 @@ export function GraphContextMenu({
   onDrillDown,
   onGoBack,
   onNavigate,
+  onEditNode,
+  onAddEdge,
+  onDeleteNode,
   onDismiss,
 }: GraphContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Clamp position to viewport
   const clampedX = Math.min(position.x, window.innerWidth - 200)
-  const clampedY = Math.min(position.y, window.innerHeight - 180)
+  const clampedY = Math.min(position.y, window.innerHeight - 300)
 
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {
@@ -74,6 +80,24 @@ export function GraphContextMenu({
         )}
         <button onClick={onNavigate} className={itemClass}>
           Navigate
+        </button>
+
+        <div className="border-t border-border-default my-1" />
+
+        <button onClick={onEditNode} className={itemClass}>
+          Edit Node
+        </button>
+        <button onClick={onAddEdge} className={itemClass}>
+          Add Edge
+        </button>
+
+        <div className="border-t border-border-default my-1" />
+
+        <button
+          onClick={onDeleteNode}
+          className="w-full text-left px-3 py-1.5 text-[12px] text-impact-breaking hover:bg-white/[0.06] transition-colors"
+        >
+          Delete Node
         </button>
       </div>
     </div>

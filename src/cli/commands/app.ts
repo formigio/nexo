@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
-import { heading, error, info } from "../output.js";
+import { heading, error, formatError, info } from "../output.js";
 import chalk from "chalk";
 
 export const appCommand = new Command("app")
@@ -22,11 +22,11 @@ appCommand
           console.log(`  ${chalk.bold(row.app)} ${chalk.dim(`(${row.count} nodes)`)}`);
         }
       }
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -40,6 +40,7 @@ appCommand
 
       if (nodes.length === 0) {
         info(`No nodes found for app: ${name}`);
+        await client.close();
         return;
       }
 
@@ -93,10 +94,11 @@ appCommand
       console.log(
         chalk.dim(`\nTotal: ${nodes.length} nodes, ${edges.length} edges`)
       );
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
+
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

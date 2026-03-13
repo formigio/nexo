@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { getApiConfig } from "../../config/loader.js";
 import { scaffoldConfig, scaffoldUserConfig } from "../../config/scaffold.js";
-import { heading, success, info, error } from "../output.js";
+import { heading, success, info, error, formatError } from "../output.js";
 
 export const initCommand = new Command("init")
   .description("Initialize the Nexo database schema")
@@ -58,7 +58,7 @@ export const initCommand = new Command("init")
         await closeDb();
       }
     } catch (err: any) {
-      error(err.message);
+      error(formatError(err));
       process.exit(1);
     }
   });

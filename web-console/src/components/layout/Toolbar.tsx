@@ -1,5 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useAuth } from '@/auth/AuthProvider'
+import { isAuthEnabled } from '@/auth/config'
 import { AppSwitcher } from '@/components/layout/AppSwitcher'
 import { GlobalSearchDropdown } from '@/components/layout/GlobalSearchDropdown'
 import type { Node } from '@/lib/types'
@@ -10,10 +12,12 @@ interface ToolbarProps {
   globalSearchQuery: string
   onGlobalSearchChange: (query: string) => void
   onNodeSelect: (node: Node) => void
+  onCreateNode: () => void
 }
 
-export function Toolbar({ appName, onAppChange, globalSearchQuery, onGlobalSearchChange, onNodeSelect }: ToolbarProps) {
+export function Toolbar({ appName, onAppChange, globalSearchQuery, onGlobalSearchChange, onNodeSelect, onCreateNode }: ToolbarProps) {
   const location = useLocation()
+  const { logout } = useAuth()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -112,6 +116,24 @@ export function Toolbar({ appName, onAppChange, globalSearchQuery, onGlobalSearc
             onSelect={handleSelect}
             onClose={() => setIsDropdownOpen(false)}
           />
+        )}
+        <button
+          data-testid="create-node-btn"
+          onClick={onCreateNode}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-white bg-node-screen rounded hover:opacity-90 transition-opacity"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          New Node
+        </button>
+        {isAuthEnabled && (
+          <button
+            onClick={logout}
+            className="text-[12px] text-text-dim hover:text-text-secondary transition-colors ml-1"
+          >
+            Sign Out
+          </button>
         )}
       </div>
     </header>

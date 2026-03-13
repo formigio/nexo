@@ -1,16 +1,32 @@
 # HTTP API Reference
 
-Nexo exposes a full CRUD JSON API for the specification graph. The API is served by `nexo web` (local) or the API container in Docker/Warden setups.
+Nexo exposes a full CRUD JSON API for the specification graph. The API is served by `nexo web` (local) or Lambda (AWS).
 
 ## Base URL
 
 | Environment | Base URL |
 |-------------|----------|
+| **AWS (production)** | `https://specs.journeyjuntos.com/api` |
 | **Warden** | `https://app.nexo.test/api` |
 | **Docker Compose** | `http://localhost:3001/api` |
 | **Local** (`nexo web`) | `http://localhost:3000/api` |
 
 All endpoints return JSON with `Content-Type: application/json`. CORS is enabled for all origins.
+
+## Authentication
+
+| Method | Header | Use case |
+|--------|--------|----------|
+| **Cognito JWT** | `Authorization: Bearer <token>` | Web console (browser) |
+| **API key** | `x-api-key: <key>` | CLI, MCP server, scripts |
+
+Local dev (Docker/Warden) has no authentication — the API is open on localhost.
+
+For the AWS deployment, the API key is stored in SSM Parameter Store (`/nexo/api-key`). Retrieve it with:
+```bash
+aws ssm get-parameter --name /nexo/api-key --with-decryption \
+  --query 'Parameter.Value' --output text --profile AdministratorAccess-047982206554
+```
 
 ---
 
@@ -458,6 +474,7 @@ All errors return JSON with an `error` field:
 | Status | Meaning |
 |--------|---------|
 | 400    | Bad request (validation error, constraint violation) |
+| 403    | Forbidden (missing or invalid auth — AWS only) |
 | 404    | Resource not found |
 | 500    | Internal server error |
 

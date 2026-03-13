@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
-import { heading, error, info, nodeLabel } from "../output.js";
+import { heading, error, formatError, info, nodeLabel } from "../output.js";
 import chalk from "chalk";
 
 export const featureCommand = new Command("feature")
@@ -24,6 +24,7 @@ featureCommand
       heading("Features");
       if (features.length === 0) {
         info("No features found.");
+        await client.close();
         return;
       }
 
@@ -51,11 +52,11 @@ featureCommand
       }
 
       console.log(chalk.dim(`\n${features.length} feature(s)`));
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });
 
@@ -68,6 +69,7 @@ featureCommand
       const feature = await client.getNode(id);
       if (!feature || feature.type !== "Feature") {
         error(`Feature not found: ${id}`);
+        await client.close();
         process.exit(1);
       }
 
@@ -104,10 +106,10 @@ featureCommand
       }
 
       console.log(chalk.dim(`\n${memberNodes.length} node(s) in scope`));
-    } catch (err: any) {
-      error(err.message);
-      process.exit(1);
-    } finally {
       await client.close();
+    } catch (err: any) {
+      error(formatError(err));
+      await client.close();
+      process.exit(1);
     }
   });

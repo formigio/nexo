@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import { ZodError } from "zod";
 import type { Node, Edge } from "../schema/types.js";
 
 export function heading(text: string): void {
@@ -12,6 +13,19 @@ export function success(text: string): void {
 
 export function error(text: string): void {
   console.error(chalk.red(`✗ ${text}`));
+}
+
+export function formatError(err: unknown): string {
+  if (err instanceof ZodError) {
+    return err.issues
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("\n  ");
+  }
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null) {
+    return JSON.stringify(err, null, 2);
+  }
+  return String(err);
 }
 
 export function warn(text: string): void {

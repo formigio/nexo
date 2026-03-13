@@ -86,3 +86,24 @@ body {
 .pulse-ring {
   animation: pulse-ring 2s ease-in-out infinite;
 }
+
+/* Toast animations */
+@keyframes toast-enter {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes toast-exit {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+.animate-toast-enter { animation: toast-enter 200ms ease-out; }
+.animate-toast-exit { animation: toast-exit 150ms ease-in forwards; }
+
+/* Modal animations */
+@keyframes modal-backdrop-enter { from { opacity: 0 } to { opacity: 1 } }
+@keyframes modal-enter {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-modal-backdrop { animation: modal-backdrop-enter 200ms ease-out; }
+.animate-modal-enter { animation: modal-enter 200ms ease-out; }

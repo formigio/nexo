@@ -1,9 +1,16 @@
+import { useState } from 'react'
 import { useComponentDetail } from '@/hooks/useComponentDetail'
 import { TypeBadge } from '@/components/shared/TypeBadge'
 import { NodePill } from '@/components/shared/NodePill'
 import { ExpandableSection } from '@/components/shared/ExpandableSection'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { ErrorState } from '@/components/shared/ErrorState'
+import { useNodeEdit } from '@/hooks/useNodeEdit'
+import { usePanelStack } from '@/hooks/usePanelStack'
+import { NodeActionRow } from './NodeActionRow'
+import { PanelEditForm } from './PanelEditForm'
+import { CreateEdgeDialog } from '@/components/create-edge/CreateEdgeDialog'
+import { DeleteNodeDialog } from '@/components/delete-node/DeleteNodeDialog'
 import type { PanelEntry } from '@/hooks/usePanelStack'
 import type { ComponentProps, DataFieldProps, UserActionProps, APIEndpointProps, SourceFileProps, FeatureProps } from '@/lib/types'
 
@@ -13,7 +20,16 @@ interface ComponentPanelProps {
 }
 
 export function ComponentPanel({ nodeId, onDrillIn }: ComponentPanelProps) {
+  const [edgeDialogOpen, setEdgeDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const panelStack = usePanelStack()
   const { data, isLoading, error } = useComponentDetail(nodeId)
+
+  const edit = useNodeEdit({
+    nodeId,
+    node: data?.component,
+    queryKeysToUpdate: [['component-detail', nodeId]],
+  })
 
   if (isLoading) return <LoadingState message="Loading component..." />
   if (error) return <ErrorState message={(error as Error).message} />
@@ -30,13 +46,32 @@ export function ComponentPanel({ nodeId, onDrillIn }: ComponentPanelProps) {
           <h2 className="text-[16px] font-semibold text-text-primary">{component.name}</h2>
           <TypeBadge type="Component" />
         </div>
-        {props.componentType && (
+        {props.componentType && edit.panelMode === 'view' && (
           <span className="text-[12px] text-text-secondary capitalize">{props.componentType}</span>
         )}
-        {component.description && (
+        {component.description && edit.panelMode === 'view' && (
           <p className="mt-2 text-[12px] text-text-secondary leading-relaxed">{component.description}</p>
         )}
       </div>
+
+      {/* Action row / Edit form */}
+      {edit.panelMode === 'view' ? (
+        <NodeActionRow onEdit={edit.enterEdit} onAddEdge={() => setEdgeDialogOpen(true)} onDelete={() => setDeleteDialogOpen(true)} />
+      ) : edit.draft ? (
+        <PanelEditForm
+          nodeId={nodeId}
+          draft={edit.draft}
+          onChange={edit.updateDraft}
+          onSave={edit.save}
+          onCancel={edit.handleCancel}
+          isSaving={edit.isSaving}
+          error={edit.saveError}
+          isDirty={edit.isDirty}
+          showDiscardPrompt={edit.showDiscardPrompt}
+          onConfirmDiscard={edit.confirmDiscard}
+          onCancelDiscard={edit.cancelDiscard}
+        />
+      ) : null}
 
       <div className="space-y-1">
         {/* Displays */}
@@ -201,6 +236,23 @@ export function ComponentPanel({ nodeId, onDrillIn }: ComponentPanelProps) {
           </div>
         )}
       </div>
+
+      <CreateEdgeDialog
+        isOpen={edgeDialogOpen}
+        sourceNode={data.component}
+        onClose={() => setEdgeDialogOpen(false)}
+        onEdgeCreated={() => setEdgeDialogOpen(false)}
+      />
+
+      <DeleteNodeDialog
+        isOpen={deleteDialogOpen}
+        node={data.component}
+        onClose={() => setDeleteDialogOpen(false)}
+        onDeleted={() => {
+          setDeleteDialogOpen(false)
+          panelStack.pop()
+        }}
+      />
     </div>
   )
 }
