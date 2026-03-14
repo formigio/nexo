@@ -1,6 +1,6 @@
 {
   "name": "@formigio/nexo",
-  "version": "1.2.0",
+  "version": "1.0.1",
   "description": "Specification graph system — make your entire app architecture queryable",
   "license": "MIT",
   "author": "Never Behind Group, LLC",
@@ -52,7 +52,12 @@
     "seed:nexo": "npm run build && node dist/seed/nexo.js",
     "web:install": "cd web-console && npm install",
     "web:dev": "cd web-console && npm run dev",
-    "web:build": "cd web-console && npm run build"
+    "web:build": "cd web-console && npm run build",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "npm run build && vitest run --project e2e",
+    "test:watch": "vitest --project unit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -72,7 +77,8 @@
     "@types/aws-lambda": "^8.10.161",
     "@types/node": "^22.13.4",
     "esbuild": "^0.27.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.0"
   },
   "publishConfig": {
     "access": "public"
