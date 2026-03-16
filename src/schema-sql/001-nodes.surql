@@ -5,7 +5,7 @@ DEFINE TABLE IF NOT EXISTS node SCHEMAFULL;
 
 -- Common fields
 DEFINE FIELD OVERWRITE type ON TABLE node TYPE string
-  ASSERT $value IN ["Screen", "Component", "UserState", "UserAction", "APIEndpoint", "DataEntity", "DataField", "BusinessRule", "Feature", "InfraResource", "SourceFile"];
+  ASSERT $value IN ["Screen", "Component", "UserState", "UserAction", "APIEndpoint", "DataEntity", "DataField", "BusinessRule", "Feature", "InfraResource", "SourceFile", "Account"];
 DEFINE FIELD IF NOT EXISTS app ON TABLE node TYPE string;
 DEFINE FIELD IF NOT EXISTS name ON TABLE node TYPE string;
 DEFINE FIELD IF NOT EXISTS description ON TABLE node TYPE option<string>;

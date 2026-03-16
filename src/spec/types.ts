@@ -69,6 +69,11 @@ export const INLINE_EDGES: Partial<Record<NodeType, Record<string, InlineEdgeDef
   Feature: {
     depends_on: { edgeType: "DEPENDS_ON", targetType: "Feature" },
   },
+  Account: {
+    funds: { edgeType: "FUNDS", targetType: "InfraResource" },
+    provides: { edgeType: "PROVIDES", targetType: "Feature" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
+  },
 };
 
 /** Maps YAML section names to node types */
@@ -84,6 +89,7 @@ export const SECTION_NODE_TYPE: Record<string, NodeType> = {
   feature: "Feature",
   files: "SourceFile",
   fields: "DataField",
+  accounts: "Account",
 };
 
 /** Load order for file kinds (dependencies first) */

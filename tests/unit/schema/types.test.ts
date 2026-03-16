@@ -19,11 +19,12 @@ import {
   UserStatePropsSchema,
   InfraResourcePropsSchema,
   SourceFilePropsSchema,
+  AccountPropsSchema,
 } from "../../../src/schema/types.js";
 
 describe("NODE_TYPES", () => {
-  it("contains all 11 types", () => {
-    expect(NODE_TYPES).toHaveLength(11);
+  it("contains all 12 types", () => {
+    expect(NODE_TYPES).toHaveLength(12);
     expect(NODE_TYPES).toContain("Screen");
     expect(NODE_TYPES).toContain("Component");
     expect(NODE_TYPES).toContain("APIEndpoint");
@@ -35,12 +36,13 @@ describe("NODE_TYPES", () => {
     expect(NODE_TYPES).toContain("UserState");
     expect(NODE_TYPES).toContain("InfraResource");
     expect(NODE_TYPES).toContain("SourceFile");
+    expect(NODE_TYPES).toContain("Account");
   });
 });
 
 describe("EDGE_TYPES", () => {
-  it("contains all 21 edge types", () => {
-    expect(EDGE_TYPES).toHaveLength(21);
+  it("contains all 23 edge types", () => {
+    expect(EDGE_TYPES).toHaveLength(23);
   });
 
   it("includes key relationship types", () => {
@@ -71,7 +73,7 @@ describe("EDGE_CONSTRAINTS", () => {
   it("BELONGS_TO allows most types → Feature", () => {
     const c = EDGE_CONSTRAINTS.BELONGS_TO;
     expect(c.to).toEqual(["Feature"]);
-    expect(c.from.length).toBeGreaterThanOrEqual(10);
+    expect(c.from.length).toBeGreaterThanOrEqual(11);
   });
 
   it("only references valid node types", () => {
@@ -250,6 +252,33 @@ describe("SourceFilePropsSchema", () => {
     });
     expect(result.language).toBe("js");
     expect(result.layer).toBe("other");
+  });
+});
+
+describe("AccountPropsSchema", () => {
+  it("requires accountType and provider", () => {
+    expect(() => AccountPropsSchema.parse({})).toThrow();
+  });
+
+  it("accepts valid account with defaults", () => {
+    const result = AccountPropsSchema.parse({
+      accountType: "payment",
+      provider: "stripe",
+    });
+    expect(result.status).toBe("active");
+    expect(result.accountId).toBeUndefined();
+  });
+
+  it("validates accountType enum", () => {
+    expect(() =>
+      AccountPropsSchema.parse({ accountType: "invalid", provider: "test" })
+    ).toThrow();
+  });
+
+  it("validates status enum", () => {
+    expect(() =>
+      AccountPropsSchema.parse({ accountType: "payment", provider: "stripe", status: "invalid" })
+    ).toThrow();
   });
 });
 

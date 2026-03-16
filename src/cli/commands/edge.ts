@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { getClient } from "../../client/factory.js";
 import { EDGE_TYPES } from "../../schema/types.js";
-import { heading, success, error, formatError, edgeTable } from "../output.js";
+import { heading, success, error, warn, formatError, edgeTable, edgeLabel } from "../output.js";
 
 export const edgeCommand = new Command("edge")
   .description("Manage edges in the spec graph");
@@ -64,13 +64,41 @@ edgeCommand
   });
 
 edgeCommand
-  .command("delete <id>")
-  .description("Delete an edge by ID")
-  .action(async (id) => {
+  .command("delete [id]")
+  .description("Delete edge(s) by ID or by filter (--from, --to, --type)")
+  .option("--from <from>", "Filter by source node ID")
+  .option("--to <to>", "Filter by target node ID")
+  .option("--type <type>", "Filter by edge type")
+  .action(async (id, opts) => {
     const client = await getClient();
     try {
-      await client.deleteEdge(id);
-      success(`Deleted edge: ${id}`);
+      if (id) {
+        // Delete by ID
+        await client.deleteEdge(id);
+        success(`Deleted edge: ${id}`);
+      } else if (opts.from || opts.to || opts.type) {
+        // Delete by filter
+        const edges = await client.listEdges({
+          type: opts.type,
+          from: opts.from,
+          to: opts.to,
+        });
+
+        if (edges.length === 0) {
+          warn("No matching edges found.");
+          await client.close();
+          return;
+        }
+
+        for (const edge of edges) {
+          await client.deleteEdge(edge.id);
+          success(`Deleted: ${edgeLabel(edge)}`);
+        }
+        success(`Deleted ${edges.length} edge(s).`);
+      } else {
+        error("Provide an edge ID or use --from, --to, --type to filter.");
+        process.exit(1);
+      }
       await client.close();
     } catch (err: any) {
       error(formatError(err));

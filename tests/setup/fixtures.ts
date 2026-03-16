@@ -112,6 +112,16 @@ export function makeSourceFile(overrides: Partial<CreateNodeInput> = {}): Create
   };
 }
 
+export function makeAccount(overrides: Partial<CreateNodeInput> = {}): CreateNodeInput {
+  return {
+    type: "Account",
+    name: overrides.name ?? "Test Account",
+    props: { accountType: "payment", provider: "stripe", status: "active" },
+    ...defaults,
+    ...overrides,
+  };
+}
+
 export function makeEdge(
   type: EdgeType,
   from: string,

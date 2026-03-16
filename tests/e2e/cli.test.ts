@@ -114,7 +114,7 @@ describe("nexo edge", () => {
     expect(stdout).toContain("RENDERS");
   });
 
-  it("lists edges", async () => {
+  it("lists edges with IDs in brackets", async () => {
     await nexo("node", "create", "Screen", "--app", "cli-test", "--name", "Home");
     await nexo(
       "node", "create", "Component", "--app", "cli-test", "--name", "Header",
@@ -123,6 +123,35 @@ describe("nexo edge", () => {
     await nexo("edge", "create", "RENDERS", "scr_home", "cmp_header");
     const { stdout } = await nexo("edge", "list");
     expect(stdout).toContain("RENDERS");
+    // Edge ID should appear in brackets
+    expect(stdout).toMatch(/\[.+\]/);
+  });
+
+  it("fails to delete a non-existent edge", async () => {
+    const output = await nexoFail("edge", "delete", "nonexistent_id");
+    expect(output).toContain("Edge not found");
+  });
+
+  it("deletes edges by filter", async () => {
+    await nexo("node", "create", "Screen", "--app", "cli-test", "--name", "Home");
+    await nexo(
+      "node", "create", "Component", "--app", "cli-test", "--name", "Header",
+      "--prop", "componentType=navigation",
+    );
+    await nexo(
+      "node", "create", "Component", "--app", "cli-test", "--name", "Footer",
+      "--prop", "componentType=layout",
+    );
+    await nexo("edge", "create", "RENDERS", "scr_home", "cmp_header");
+    await nexo("edge", "create", "RENDERS", "scr_home", "cmp_footer");
+
+    const { stdout } = await nexo("edge", "delete", "--from", "scr_home", "--type", "RENDERS");
+    expect(stdout).toContain("Deleted");
+    expect(stdout).toContain("2 edge(s)");
+
+    // Verify edges are gone
+    const { stdout: listOut } = await nexo("edge", "list");
+    expect(listOut).toContain("No edges found");
   });
 });
 

@@ -43,7 +43,7 @@ export function nodeLabel(node: Node): string {
 export function edgeLabel(edge: Edge): string {
   const from = edge.in.replace(/^node:/, "");
   const to = edge.out.replace(/^node:/, "");
-  return `${chalk.dim(from)} ${chalk.yellow(`─${edge.type}→`)} ${chalk.dim(to)}`;
+  return `${chalk.dim(from)} ${chalk.yellow(`─${edge.type}→`)} ${chalk.dim(to)}  ${chalk.dim(`[${edge.id}]`)}`;
 }
 
 export function nodeDetail(node: Node): void {

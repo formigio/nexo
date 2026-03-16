@@ -14,6 +14,7 @@ export const NodeType = {
   Feature: "Feature",
   InfraResource: "InfraResource",
   SourceFile: "SourceFile",
+  Account: "Account",
 } as const;
 
 export type NodeType = (typeof NodeType)[keyof typeof NodeType];
@@ -44,6 +45,8 @@ export const EdgeType = {
   DISPLAYS: "DISPLAYS",
   ACCEPTS_INPUT: "ACCEPTS_INPUT",
   IMPLEMENTED_IN: "IMPLEMENTED_IN",
+  FUNDS: "FUNDS",
+  PROVIDES: "PROVIDES",
 } as const;
 
 export type EdgeType = (typeof EdgeType)[keyof typeof EdgeType];
@@ -64,6 +67,7 @@ export const TYPE_PREFIX: Record<NodeType, string> = {
   Feature: "ftr",
   InfraResource: "inf",
   SourceFile: "fil",
+  Account: "acc",
 };
 
 // ── Edge Constraints (source type → target type) ────────────
@@ -94,6 +98,7 @@ export const EDGE_CONSTRAINTS: Record<EdgeType, { from: NodeType[]; to: NodeType
       "BusinessRule",
       "InfraResource",
       "SourceFile",
+      "Account",
     ],
     to: ["Feature"],
   },
@@ -105,9 +110,11 @@ export const EDGE_CONSTRAINTS: Record<EdgeType, { from: NodeType[]; to: NodeType
   ACCEPTS_INPUT: { from: ["Component"], to: ["DataField"] },
   IMPLEMENTED_IN: {
     from: ["Screen", "Component", "APIEndpoint", "DataEntity",
-           "BusinessRule", "UserAction", "UserState", "InfraResource", "Feature"],
+           "BusinessRule", "UserAction", "UserState", "InfraResource", "Feature", "Account"],
     to: ["SourceFile"],
   },
+  FUNDS: { from: ["Account"], to: ["InfraResource", "Account"] },
+  PROVIDES: { from: ["Account"], to: ["Feature", "APIEndpoint"] },
 };
 
 // ── Type-specific Props Schemas ─────────────────────────────
@@ -187,6 +194,16 @@ export const InfraResourcePropsSchema = z.object({
   environment: z.enum(["dev", "prod", "both"]).default("both"),
 });
 
+export const AccountPropsSchema = z.object({
+  accountType: z.enum(["payment", "mapping", "domain", "hosting", "auth", "corporate", "other"]),
+  provider: z.string(),
+  accountId: z.string().optional(),
+  billingMethod: z.string().optional(),
+  renewalDate: z.string().optional(),
+  cost: z.string().optional(),
+  status: z.enum(["active", "inactive", "pending"]).default("active"),
+});
+
 export const SourceFilePropsSchema = z.object({
   repo: z.string(),
   relativePath: z.string(),
@@ -209,6 +226,7 @@ export const PROPS_SCHEMA: Record<NodeType, z.ZodType> = {
   Feature: FeaturePropsSchema,
   InfraResource: InfraResourcePropsSchema,
   SourceFile: SourceFilePropsSchema,
+  Account: AccountPropsSchema,
 };
 
 // ── Common Node Schema ──────────────────────────────────────

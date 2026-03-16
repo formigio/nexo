@@ -53,6 +53,7 @@ describe("generateNodeId", () => {
       Feature: "ftr",
       InfraResource: "inf",
       SourceFile: "fil",
+      Account: "acc",
     };
 
     for (const nodeType of NODE_TYPES) {
@@ -61,8 +62,8 @@ describe("generateNodeId", () => {
     }
   });
 
-  it("covers all 11 node types", () => {
-    expect(NODE_TYPES).toHaveLength(11);
-    expect(Object.keys(TYPE_PREFIX)).toHaveLength(11);
+  it("covers all 12 node types", () => {
+    expect(NODE_TYPES).toHaveLength(12);
+    expect(Object.keys(TYPE_PREFIX)).toHaveLength(12);
   });
 });

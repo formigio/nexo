@@ -12,7 +12,7 @@ const EMBEDDED_MIGRATIONS: { name: string; sql: string }[] = [
     name: "001-nodes.surql",
     sql: `DEFINE TABLE IF NOT EXISTS node SCHEMAFULL;
 DEFINE FIELD OVERWRITE type ON TABLE node TYPE string
-  ASSERT $value IN ["Screen", "Component", "UserState", "UserAction", "APIEndpoint", "DataEntity", "DataField", "BusinessRule", "Feature", "InfraResource", "SourceFile"];
+  ASSERT $value IN ["Screen", "Component", "UserState", "UserAction", "APIEndpoint", "DataEntity", "DataField", "BusinessRule", "Feature", "InfraResource", "SourceFile", "Account"];
 DEFINE FIELD IF NOT EXISTS app ON TABLE node TYPE string;
 DEFINE FIELD IF NOT EXISTS name ON TABLE node TYPE string;
 DEFINE FIELD IF NOT EXISTS description ON TABLE node TYPE option<string>;
@@ -27,7 +27,7 @@ DEFINE FIELD IF NOT EXISTS version ON TABLE node TYPE int DEFAULT 1;`,
     name: "002-edges.surql",
     sql: `DEFINE TABLE IF NOT EXISTS edge TYPE RELATION IN node OUT node SCHEMALESS;
 DEFINE FIELD OVERWRITE type ON TABLE edge TYPE string
-  ASSERT $value IN ["RENDERS", "CHILD_OF", "TRIGGERS", "CALLS", "REQUIRES_STATE", "TRANSITIONS_TO", "READS", "WRITES", "HAS_FIELD", "REFERENCES", "VALIDATES", "CONSTRAINS", "AUTHORIZES", "BELONGS_TO", "DEPENDS_ON", "HOSTED_ON", "STORED_IN", "NAVIGATES_TO", "DISPLAYS", "ACCEPTS_INPUT", "IMPLEMENTED_IN"];
+  ASSERT $value IN ["RENDERS", "CHILD_OF", "TRIGGERS", "CALLS", "REQUIRES_STATE", "TRANSITIONS_TO", "READS", "WRITES", "HAS_FIELD", "REFERENCES", "VALIDATES", "CONSTRAINS", "AUTHORIZES", "BELONGS_TO", "DEPENDS_ON", "HOSTED_ON", "STORED_IN", "NAVIGATES_TO", "DISPLAYS", "ACCEPTS_INPUT", "IMPLEMENTED_IN", "FUNDS", "PROVIDES"];
 DEFINE FIELD IF NOT EXISTS createdAt ON TABLE edge TYPE datetime DEFAULT time::now();`,
   },
   {

@@ -92,9 +92,16 @@ export async function listEdges(
 
 /**
  * Delete an edge by its SurrealDB record ID.
+ * Throws if the edge does not exist.
  */
 export async function deleteEdge(db: Surreal, id: string): Promise<boolean> {
-  await db.query(`DELETE type::record("edge", $id)`, { id });
+  const [result] = await db.query<[any[]]>(
+    `DELETE type::record("edge", $id) RETURN BEFORE`,
+    { id }
+  );
+  if (!result || result.length === 0) {
+    throw new Error(`Edge not found: ${id}`);
+  }
   return true;
 }
 

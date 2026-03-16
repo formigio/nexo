@@ -389,6 +389,10 @@ export function createHandler(db: Surreal, defaultApp?: string) {
         return;
       }
       const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith("Edge not found:")) {
+        json(res, { error: msg }, 404);
+        return;
+      }
       if (
         msg.includes("not found:") ||
         msg.includes("cannot originate from") ||

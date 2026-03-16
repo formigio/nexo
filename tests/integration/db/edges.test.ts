@@ -183,4 +183,8 @@ describe("deleteEdge", () => {
     const edges = await listEdges(db);
     expect(edges).toHaveLength(0);
   });
+
+  it("throws when edge ID does not exist", async () => {
+    await expect(deleteEdge(db, "nonexistent_id")).rejects.toThrow("Edge not found: nonexistent_id");
+  });
 });

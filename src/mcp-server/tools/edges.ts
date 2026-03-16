@@ -64,12 +64,38 @@ export function registerEdgeTools(server: McpServer, client: GraphClient): void 
 
   server.tool(
     "delete_edge",
-    "Delete an edge by its ID. This removes the relationship between two nodes.",
-    { id: z.string().describe("Edge ID to delete") },
-    async ({ id }) => {
+    "Delete edge(s) by ID or by filter. Provide `id` to delete a single edge, or use `from`, `to`, `type` filters to delete all matching edges.",
+    {
+      id: z.string().optional().describe("Edge ID to delete (if known)"),
+      from: z.string().optional().describe("Filter by source node ID"),
+      to: z.string().optional().describe("Filter by target node ID"),
+      type: z.string().optional().describe(`Filter by edge type: ${EDGE_TYPES.join(", ")}`),
+    },
+    async ({ id, from, to, type }) => {
       try {
-        await client.deleteEdge(id);
-        return { content: [{ type: "text", text: `Deleted edge: ${id}` }] };
+        if (id) {
+          await client.deleteEdge(id);
+          return { content: [{ type: "text", text: `Deleted edge: ${id}` }] };
+        }
+
+        if (from || to || type) {
+          const edges = await client.listEdges({ type, from, to });
+          if (edges.length === 0) {
+            return { content: [{ type: "text", text: "No matching edges found." }] };
+          }
+          const lines: string[] = [];
+          for (const edge of edges) {
+            await client.deleteEdge(edge.id);
+            lines.push(`  Deleted: ${formatEdge(edge)}  [${edge.id}]`);
+          }
+          lines.push(`\nDeleted ${edges.length} edge(s).`);
+          return { content: [{ type: "text", text: lines.join("\n") }] };
+        }
+
+        return {
+          content: [{ type: "text", text: "Error: Provide an edge `id` or use `from`, `to`, `type` filters." }],
+          isError: true,
+        };
       } catch (err) {
         return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
       }
