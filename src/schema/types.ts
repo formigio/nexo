@@ -15,6 +15,8 @@ export const NodeType = {
   InfraResource: "InfraResource",
   SourceFile: "SourceFile",
   Account: "Account",
+  CLICommand: "CLICommand",
+  AgentProcess: "AgentProcess",
 } as const;
 
 export type NodeType = (typeof NodeType)[keyof typeof NodeType];
@@ -68,6 +70,8 @@ export const TYPE_PREFIX: Record<NodeType, string> = {
   InfraResource: "inf",
   SourceFile: "fil",
   Account: "acc",
+  CLICommand: "cli",
+  AgentProcess: "agt",
 };
 
 // ── Edge Constraints (source type → target type) ────────────
@@ -76,7 +80,7 @@ export const EDGE_CONSTRAINTS: Record<EdgeType, { from: NodeType[]; to: NodeType
   RENDERS: { from: ["Screen"], to: ["Component"] },
   CHILD_OF: { from: ["Screen", "DataEntity", "DataField"], to: ["Screen", "DataEntity"] },
   TRIGGERS: { from: ["Component", "Feature"], to: ["UserAction", "Feature"] },
-  CALLS: { from: ["UserAction", "APIEndpoint"], to: ["APIEndpoint", "Feature"] },
+  CALLS: { from: ["UserAction", "APIEndpoint", "CLICommand", "AgentProcess"], to: ["APIEndpoint", "Feature"] },
   REQUIRES_STATE: { from: ["Screen"], to: ["UserState"] },
   TRANSITIONS_TO: { from: ["UserState"], to: ["UserState"] },
   READS: { from: ["APIEndpoint", "Feature"], to: ["DataEntity"] },
@@ -99,18 +103,21 @@ export const EDGE_CONSTRAINTS: Record<EdgeType, { from: NodeType[]; to: NodeType
       "InfraResource",
       "SourceFile",
       "Account",
+      "CLICommand",
+      "AgentProcess",
     ],
     to: ["Feature"],
   },
-  DEPENDS_ON: { from: ["Feature", "SourceFile"], to: ["Feature", "SourceFile"] },
-  HOSTED_ON: { from: ["APIEndpoint"], to: ["InfraResource"] },
+  DEPENDS_ON: { from: ["Feature", "SourceFile", "InfraResource", "CLICommand", "AgentProcess"], to: ["Feature", "SourceFile", "InfraResource"] },
+  HOSTED_ON: { from: ["APIEndpoint", "AgentProcess"], to: ["InfraResource"] },
   STORED_IN: { from: ["DataEntity"], to: ["InfraResource", "DataEntity"] },
   NAVIGATES_TO: { from: ["UserAction"], to: ["Screen"] },
   DISPLAYS: { from: ["Component", "APIEndpoint"], to: ["DataField", "Feature"] },
   ACCEPTS_INPUT: { from: ["Component"], to: ["DataField"] },
   IMPLEMENTED_IN: {
     from: ["Screen", "Component", "APIEndpoint", "DataEntity",
-           "BusinessRule", "UserAction", "UserState", "InfraResource", "Feature", "Account"],
+           "BusinessRule", "UserAction", "UserState", "InfraResource", "Feature", "Account",
+           "CLICommand", "AgentProcess"],
     to: ["SourceFile"],
   },
   FUNDS: { from: ["Account"], to: ["InfraResource", "Account"] },
@@ -156,7 +163,7 @@ export const APIEndpointPropsSchema = z.object({
 });
 
 export const DataEntityPropsSchema = z.object({
-  storageType: z.enum(["dynamodb", "s3", "cognito", "stripe", "cache", "surrealdb"]),
+  storageType: z.enum(["dynamodb", "s3", "cognito", "stripe", "cache", "surrealdb", "postgresql"]),
   keyPattern: z.string().optional(),
   indexes: z.array(z.string()).optional(),
   ttl: z.boolean().default(false),
@@ -204,6 +211,20 @@ export const AccountPropsSchema = z.object({
   status: z.enum(["active", "inactive", "pending"]).default("active"),
 });
 
+export const CLICommandPropsSchema = z.object({
+  command: z.string(),
+  subcommand: z.string().optional(),
+  fullCommand: z.string(),
+  flags: z.array(z.string()).optional(),
+  repo: z.string(),
+});
+
+export const AgentProcessPropsSchema = z.object({
+  processType: z.enum(["orchestrator", "evaluator", "reviewer", "prompt-builder", "output-handler", "runner"]),
+  runtime: z.enum(["docker", "local", "fargate"]).default("docker"),
+  repo: z.string(),
+});
+
 export const SourceFilePropsSchema = z.object({
   repo: z.string(),
   relativePath: z.string(),
@@ -227,6 +248,8 @@ export const PROPS_SCHEMA: Record<NodeType, z.ZodType> = {
   InfraResource: InfraResourcePropsSchema,
   SourceFile: SourceFilePropsSchema,
   Account: AccountPropsSchema,
+  CLICommand: CLICommandPropsSchema,
+  AgentProcess: AgentProcessPropsSchema,
 };
 
 // ── Common Node Schema ──────────────────────────────────────

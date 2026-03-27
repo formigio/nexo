@@ -196,6 +196,45 @@ A source code file that implements part of the specification. Makes implementati
 
 **Example:** `web/src/pages/Schedule.jsx`, `infra/unified-stack/src/api/trips.js`, `infra/unified-stack/template.yaml`
 
+### Account
+
+A billing or service account that funds infrastructure or provides access to features.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `accountType` | string | `"payment"`, `"mapping"`, `"domain"`, `"hosting"`, `"auth"`, `"corporate"`, `"other"` |
+| `provider` | string | Account provider (e.g., `"aws"`, `"stripe"`, `"google"`) |
+| `accountId` | string? | Account identifier |
+| `billingMethod` | string? | How the account is billed |
+
+**Example:** `AWS Production Account`, `Stripe Business Account`, `Google Maps API Account`
+
+### CLICommand
+
+A command-line interface command exposed by the application.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `command` | string | Top-level command name (e.g., `"nexo"`) |
+| `subcommand` | string? | Subcommand name (e.g., `"node create"`) |
+| `fullCommand` | string | Full command string (e.g., `"nexo node create"`) |
+| `flags` | string[]? | Available flags (e.g., `["--app", "--type"]`) |
+| `repo` | string | Repository this command lives in |
+
+**Example:** `nexo node create`, `nexo traverse`, `nexo impact`
+
+### AgentProcess
+
+An AI agent or automated process that interacts with the system.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `processType` | string | `"orchestrator"`, `"evaluator"`, `"reviewer"`, `"prompt-builder"`, `"output-handler"`, `"runner"` |
+| `runtime` | string? | `"docker"`, `"local"`, `"fargate"` |
+| `repo` | string | Repository this process lives in |
+
+**Example:** `Spec Sync Agent`, `Impact Analysis Runner`, `Code Review Evaluator`
+
 ---
 
 ## Edge Types
@@ -220,7 +259,7 @@ Edges are directional and typed. Each edge connects a source node to a target no
 | `RENDERS` | Screen → Component | Screen contains/displays this component |
 | `CHILD_OF` | Screen → Screen | Screen is a child/sub-screen of another |
 | `TRIGGERS` | Component → UserAction | Interacting with this component triggers this action |
-| `CALLS` | UserAction → APIEndpoint | This action results in this API call |
+| `CALLS` | UserAction/CLICommand/AgentProcess → APIEndpoint | This action/command/process results in this API call |
 | `REQUIRES_STATE` | Screen → UserState | Screen requires user to be in this state |
 | `TRANSITIONS_TO` | UserState → UserState | User can transition between states (via UserAction) |
 | `READS` | APIEndpoint → DataEntity | Endpoint reads from this entity |
@@ -231,13 +270,15 @@ Edges are directional and typed. Each edge connects a source node to a target no
 | `CONSTRAINS` | BusinessRule → UserAction | Rule constrains when/how this action can be performed |
 | `AUTHORIZES` | BusinessRule → APIEndpoint | Rule controls access to this endpoint |
 | `BELONGS_TO` | * → Feature | Node is part of this feature |
-| `DEPENDS_ON` | Feature → Feature | Feature depends on another feature |
-| `HOSTED_ON` | APIEndpoint → InfraResource | Endpoint runs on this infrastructure |
+| `DEPENDS_ON` | Feature/CLICommand/AgentProcess → Feature/InfraResource | Node depends on another node |
+| `HOSTED_ON` | APIEndpoint/AgentProcess → InfraResource | Node runs on this infrastructure |
 | `STORED_IN` | DataEntity → InfraResource | Entity is persisted in this resource |
 | `NAVIGATES_TO` | UserAction → Screen | Action navigates user to this screen |
 | `DISPLAYS` | Component → DataField | Component displays this data field |
 | `ACCEPTS_INPUT` | Component → DataField | Component accepts input for this field |
-| `IMPLEMENTED_IN` | Screen/Component/APIEndpoint/DataEntity/BusinessRule/UserAction/UserState/InfraResource → SourceFile | Spec node is implemented in this source file |
+| `FUNDS` | Account → InfraResource | Account pays for this infrastructure resource |
+| `PROVIDES` | Account → Feature | Account provides access enabling this feature |
+| `IMPLEMENTED_IN` | Screen/Component/APIEndpoint/DataEntity/BusinessRule/UserAction/UserState/InfraResource/CLICommand/AgentProcess/Account → SourceFile | Spec node is implemented in this source file |
 
 ### Edge Cardinality
 

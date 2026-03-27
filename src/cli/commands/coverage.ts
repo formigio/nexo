@@ -5,7 +5,7 @@ import { heading, error, formatError, info } from "../output.js";
 import chalk from "chalk";
 
 /** Node types that represent spec (non-leaf) nodes which should be backed by source files. */
-const SPEC_TYPES = ["Screen", "Component", "APIEndpoint", "DataEntity", "BusinessRule"];
+const SPEC_TYPES = ["Screen", "Component", "APIEndpoint", "DataEntity", "BusinessRule", "CLICommand", "AgentProcess"];
 
 export const coverageCommand = new Command("coverage")
   .description("Report spec-to-source coverage for an application")

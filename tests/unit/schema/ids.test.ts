@@ -54,6 +54,8 @@ describe("generateNodeId", () => {
       InfraResource: "inf",
       SourceFile: "fil",
       Account: "acc",
+      CLICommand: "cli",
+      AgentProcess: "agt",
     };
 
     for (const nodeType of NODE_TYPES) {
@@ -62,8 +64,8 @@ describe("generateNodeId", () => {
     }
   });
 
-  it("covers all 12 node types", () => {
-    expect(NODE_TYPES).toHaveLength(12);
-    expect(Object.keys(TYPE_PREFIX)).toHaveLength(12);
+  it("covers all 14 node types", () => {
+    expect(NODE_TYPES).toHaveLength(14);
+    expect(Object.keys(TYPE_PREFIX)).toHaveLength(14);
   });
 });

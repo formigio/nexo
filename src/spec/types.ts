@@ -60,6 +60,20 @@ export const INLINE_EDGES: Partial<Record<NodeType, Record<string, InlineEdgeDef
     implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   InfraResource: {
+    depends_on: { edgeType: "DEPENDS_ON", targetType: "InfraResource" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
+  },
+  CLICommand: {
+    calls: { edgeType: "CALLS", targetType: "APIEndpoint" },
+    // Only resolves to Feature; use explicit edges: for InfraResource/SourceFile targets
+    depends_on: { edgeType: "DEPENDS_ON", targetType: "Feature" },
+    implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
+  },
+  AgentProcess: {
+    calls: { edgeType: "CALLS", targetType: "APIEndpoint" },
+    // Only resolves to InfraResource; use explicit edges: for Feature/SourceFile targets
+    depends_on: { edgeType: "DEPENDS_ON", targetType: "InfraResource" },
+    hosted_on: { edgeType: "HOSTED_ON", targetType: "InfraResource" },
     implemented_in: { edgeType: "IMPLEMENTED_IN", targetType: "SourceFile" },
   },
   UserState: {
@@ -88,6 +102,8 @@ export const SECTION_NODE_TYPE: Record<string, NodeType> = {
   states: "UserState",
   feature: "Feature",
   files: "SourceFile",
+  commands: "CLICommand",
+  processes: "AgentProcess",
   fields: "DataField",
   accounts: "Account",
 };

@@ -125,6 +125,21 @@ export function parseSpecFile(filePath: string): ParseResult {
         nodes.push(extractNode(entry as Record<string, unknown>, "SourceFile"));
       }
     }
+    if (data.commands) {
+      for (const entry of data.commands) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "CLICommand"));
+      }
+    }
+    if (data.processes) {
+      for (const entry of data.processes) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "AgentProcess"));
+      }
+    }
+    if (data.accounts) {
+      for (const entry of data.accounts) {
+        nodes.push(extractNode(entry as Record<string, unknown>, "Account"));
+      }
+    }
     if (data.fields) {
       for (const entry of data.fields) {
         nodes.push(extractNode(entry as Record<string, unknown>, "DataField"));

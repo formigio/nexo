@@ -12,7 +12,7 @@ const EMBEDDED_MIGRATIONS: { name: string; sql: string }[] = [
     name: "001-nodes.surql",
     sql: `DEFINE TABLE IF NOT EXISTS node SCHEMAFULL;
 DEFINE FIELD OVERWRITE type ON TABLE node TYPE string
-  ASSERT $value IN ["Screen", "Component", "UserState", "UserAction", "APIEndpoint", "DataEntity", "DataField", "BusinessRule", "Feature", "InfraResource", "SourceFile", "Account"];
+  ASSERT $value IN ["Screen", "Component", "UserState", "UserAction", "APIEndpoint", "DataEntity", "DataField", "BusinessRule", "Feature", "InfraResource", "SourceFile", "Account", "CLICommand", "AgentProcess"];
 DEFINE FIELD IF NOT EXISTS app ON TABLE node TYPE string;
 DEFINE FIELD IF NOT EXISTS name ON TABLE node TYPE string;
 DEFINE FIELD IF NOT EXISTS description ON TABLE node TYPE option<string>;

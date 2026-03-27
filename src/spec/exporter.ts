@@ -138,6 +138,9 @@ export async function exportToSpec(
     { type: "UserAction", section: "actions", fileName: "actions" },
     { type: "APIEndpoint", section: "endpoints", fileName: "endpoints" },
     { type: "BusinessRule", section: "rules", fileName: "rules" },
+    { type: "CLICommand", section: "commands", fileName: "commands" },
+    { type: "AgentProcess", section: "processes", fileName: "processes" },
+    { type: "Account", section: "accounts", fileName: "accounts" },
   ];
   for (const { type, section, fileName } of sharedSections) {
     const orphans = nodes.filter(
@@ -230,6 +233,15 @@ function buildFeatureYaml(
   }
   if (byType.SourceFile?.length) {
     doc.files = byType.SourceFile.map(n => buildNodeEntry(n, edges, nodeById));
+  }
+  if (byType.CLICommand?.length) {
+    doc.commands = byType.CLICommand.map(n => buildNodeEntry(n, edges, nodeById));
+  }
+  if (byType.AgentProcess?.length) {
+    doc.processes = byType.AgentProcess.map(n => buildNodeEntry(n, edges, nodeById));
+  }
+  if (byType.Account?.length) {
+    doc.accounts = byType.Account.map(n => buildNodeEntry(n, edges, nodeById));
   }
 
   // Orphan DataFields: belong to this feature but not nested under any DataEntity

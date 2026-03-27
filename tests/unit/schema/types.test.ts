@@ -20,11 +20,13 @@ import {
   InfraResourcePropsSchema,
   SourceFilePropsSchema,
   AccountPropsSchema,
+  CLICommandPropsSchema,
+  AgentProcessPropsSchema,
 } from "../../../src/schema/types.js";
 
 describe("NODE_TYPES", () => {
-  it("contains all 12 types", () => {
-    expect(NODE_TYPES).toHaveLength(12);
+  it("contains all 14 types", () => {
+    expect(NODE_TYPES).toHaveLength(14);
     expect(NODE_TYPES).toContain("Screen");
     expect(NODE_TYPES).toContain("Component");
     expect(NODE_TYPES).toContain("APIEndpoint");
@@ -37,6 +39,8 @@ describe("NODE_TYPES", () => {
     expect(NODE_TYPES).toContain("InfraResource");
     expect(NODE_TYPES).toContain("SourceFile");
     expect(NODE_TYPES).toContain("Account");
+    expect(NODE_TYPES).toContain("CLICommand");
+    expect(NODE_TYPES).toContain("AgentProcess");
   });
 });
 
@@ -279,6 +283,62 @@ describe("AccountPropsSchema", () => {
     expect(() =>
       AccountPropsSchema.parse({ accountType: "payment", provider: "stripe", status: "invalid" })
     ).toThrow();
+  });
+});
+
+describe("CLICommandPropsSchema", () => {
+  it("requires command, fullCommand, and repo", () => {
+    expect(() => CLICommandPropsSchema.parse({})).toThrow();
+  });
+
+  it("accepts valid command", () => {
+    const result = CLICommandPropsSchema.parse({
+      command: "ws",
+      fullCommand: "fazemos ws list",
+      repo: "fazemos-cli",
+    });
+    expect(result.command).toBe("ws");
+    expect(result.fullCommand).toBe("fazemos ws list");
+    expect(result.repo).toBe("fazemos-cli");
+  });
+
+  it("accepts optional subcommand and flags", () => {
+    const result = CLICommandPropsSchema.parse({
+      command: "ws",
+      subcommand: "list",
+      fullCommand: "fazemos ws list",
+      repo: "fazemos-cli",
+      flags: ["--org", "--format"],
+    });
+    expect(result.subcommand).toBe("list");
+    expect(result.flags).toEqual(["--org", "--format"]);
+  });
+});
+
+describe("AgentProcessPropsSchema", () => {
+  it("requires processType and repo", () => {
+    expect(() => AgentProcessPropsSchema.parse({})).toThrow();
+  });
+
+  it("validates processType enum", () => {
+    expect(() =>
+      AgentProcessPropsSchema.parse({ processType: "invalid", repo: "test" })
+    ).toThrow();
+  });
+
+  it("applies runtime default", () => {
+    const result = AgentProcessPropsSchema.parse({
+      processType: "runner",
+      repo: "fazemos-agent",
+    });
+    expect(result.runtime).toBe("docker");
+  });
+
+  it("accepts all processType values", () => {
+    for (const pt of ["orchestrator", "evaluator", "reviewer", "prompt-builder", "output-handler", "runner"]) {
+      const result = AgentProcessPropsSchema.parse({ processType: pt, repo: "test" });
+      expect(result.processType).toBe(pt);
+    }
   });
 });
 

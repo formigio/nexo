@@ -75,7 +75,7 @@ export const DataFieldEntrySchema = yamlNodeBase.extend({
 });
 
 export const DataEntityEntrySchema = yamlNodeBase.extend({
-  storageType: z.enum(["dynamodb", "s3", "cognito", "stripe", "cache", "surrealdb"]),
+  storageType: z.enum(["dynamodb", "s3", "cognito", "stripe", "cache", "surrealdb", "postgresql"]),
   keyPattern: z.string().optional(),
   indexes: z.array(z.string()).optional(),
   ttl: z.boolean().optional(),
@@ -104,6 +104,7 @@ export const InfraResourceEntrySchema = yamlNodeBase.extend({
   resourceId: z.string().optional(),
   environment: z.enum(["dev", "prod", "both"]).optional(),
   // Inline edges
+  depends_on: edgeRef,
   implemented_in: edgeRef,
 });
 
@@ -113,6 +114,40 @@ export const UserStateEntrySchema = yamlNodeBase.extend({
   isTerminal: z.boolean().optional(),
   // Inline edges
   transitions_to: edgeRef,
+  implemented_in: edgeRef,
+});
+
+export const CLICommandEntrySchema = yamlNodeBase.extend({
+  command: z.string(),
+  subcommand: z.string().optional(),
+  fullCommand: z.string(),
+  flags: z.array(z.string()).optional(),
+  repo: z.string(),
+  // Inline edges
+  calls: edgeRef,
+  depends_on: edgeRef,
+  implemented_in: edgeRef,
+});
+
+export const AgentProcessEntrySchema = yamlNodeBase.extend({
+  processType: z.enum(["orchestrator", "evaluator", "reviewer", "prompt-builder", "output-handler", "runner"]),
+  runtime: z.enum(["docker", "local", "fargate"]).optional(),
+  repo: z.string(),
+  // Inline edges
+  calls: edgeRef,
+  depends_on: edgeRef,
+  hosted_on: edgeRef,
+  implemented_in: edgeRef,
+});
+
+export const AccountEntrySchema = yamlNodeBase.extend({
+  accountType: z.enum(["payment", "mapping", "domain", "hosting", "auth", "corporate", "other"]),
+  provider: z.string(),
+  accountId: z.string().optional(),
+  billingMethod: z.string().optional(),
+  // Inline edges
+  funds: edgeRef,
+  provides: edgeRef,
   implemented_in: edgeRef,
 });
 
@@ -162,6 +197,9 @@ export const FeatureFileSchema = fileBase.extend({
   resources: z.array(InfraResourceEntrySchema).optional(),
   states: z.array(UserStateEntrySchema).optional(),
   files: z.array(SourceFileEntrySchema).optional(),
+  commands: z.array(CLICommandEntrySchema).optional(),
+  processes: z.array(AgentProcessEntrySchema).optional(),
+  accounts: z.array(AccountEntrySchema).optional(),
   fields: z.array(DataFieldEntrySchema).optional(),
   edges: z.array(ExplicitEdgeSchema).optional(),
 });

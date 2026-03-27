@@ -37,6 +37,9 @@ EXCLUDES=(
   "scripts/deploy-console.sh"
   "scripts/ingest-remote.sh"
 
+  # Internal spec files with infrastructure details (SSM paths, domains)
+  "specs/nexo/infra/"
+
   # Docker compose (may contain env vars, volume paths)
   "docker-compose.yml"
 
