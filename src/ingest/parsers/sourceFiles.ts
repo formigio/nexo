@@ -8,10 +8,9 @@ export interface ParsedSourceFile {
   layer: string;
 }
 
-const SKIP_DIRS = new Set([
-  "node_modules", "dist", ".git", ".cache", "build", "coverage",
-  "__tests__", "__mocks__", "test", "tests", ".aws-sam",
-]);
+import { DEFAULTS } from "../../config/schema.js";
+
+const BUILTIN_SKIP_DIRS = new Set(DEFAULTS.ingest.builtinSkipDirs);
 
 const LANG_MAP: Record<string, string> = {
   ".jsx": "jsx", ".tsx": "tsx", ".js": "js", ".ts": "ts",
@@ -25,11 +24,16 @@ const LANG_MAP: Record<string, string> = {
 export function parseSourceFiles(
   rootPath: string,
   repo: string,
+  extraSkipDirs?: string[],
 ): ParsedSourceFile[] {
   if (!existsSync(rootPath)) return [];
 
+  const skipDirs = extraSkipDirs?.length
+    ? new Set([...BUILTIN_SKIP_DIRS, ...extraSkipDirs])
+    : BUILTIN_SKIP_DIRS;
+
   const files: ParsedSourceFile[] = [];
-  walkDir(rootPath, rootPath, repo, files);
+  walkDir(rootPath, rootPath, repo, files, skipDirs);
   return files;
 }
 
@@ -38,6 +42,7 @@ function walkDir(
   rootPath: string,
   repo: string,
   files: ParsedSourceFile[],
+  skipDirs: Set<string>,
 ): void {
   let entries;
   try {
@@ -48,12 +53,12 @@ function walkDir(
 
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
-    if (SKIP_DIRS.has(entry.name)) continue;
+    if (skipDirs.has(entry.name)) continue;
 
     const fullPath = join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      walkDir(fullPath, rootPath, repo, files);
+      walkDir(fullPath, rootPath, repo, files, skipDirs);
     } else if (entry.isFile()) {
       const ext = extname(entry.name);
       const language = LANG_MAP[ext];

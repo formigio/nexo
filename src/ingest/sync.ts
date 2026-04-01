@@ -4,7 +4,9 @@ import { generateNodeId } from "../schema/ids.js";
 import type { Node } from "../schema/types.js";
 import type { ParsedEndpoint } from "./parsers/sam.js";
 import type { ParsedScreen } from "./parsers/routes.js";
-import { basename, resolve } from "node:path";
+import { basename, resolve, join } from "node:path";
+import { existsSync } from "node:fs";
+import { DEFAULTS } from "../config/schema.js";
 import type { ParsedSourceFile } from "./parsers/sourceFiles.js";
 import { endpointName, parseSamTemplate } from "./parsers/sam.js";
 import { screenName, parseRoutes } from "./parsers/routes.js";
@@ -16,6 +18,10 @@ export interface SyncOptions {
   frontendPath?: string;
   backendPath?: string;
   apply?: boolean;
+  samTemplate?: string;
+  appEntry?: string;
+  handlerSourceRoots?: string[];
+  skipDirs?: string[];
 }
 
 export interface SyncResults {
@@ -36,6 +42,60 @@ interface PropsUpdate {
 }
 
 /**
+ * Find the SAM template file within a backend path.
+ * If `configured` is set, resolves it directly; otherwise searches candidates.
+ */
+function findSamTemplate(backendPath: string, configured?: string): string {
+  if (configured) {
+    const resolved = join(backendPath, configured);
+    if (existsSync(resolved)) return resolved;
+    throw new Error(
+      `Configured SAM template not found: ${resolved}\n` +
+      `  (set via ingest.samTemplate in .nexo/config.json)`
+    );
+  }
+
+  const candidates = DEFAULTS.ingest.samTemplateCandidates.map(
+    (c) => join(backendPath, c)
+  );
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `No SAM template found in ${backendPath}. Checked:\n` +
+    candidates.map((c) => `  - ${c}`).join("\n") +
+    `\n  Hint: set ingest.samTemplate in .nexo/config.json`
+  );
+}
+
+/**
+ * Find the React app entry file (App.tsx or App.jsx).
+ * If `configured` is set, resolves it directly; otherwise searches candidates.
+ */
+function findAppEntry(frontendPath: string, configured?: string): string {
+  if (configured) {
+    const resolved = join(frontendPath, configured);
+    if (existsSync(resolved)) return resolved;
+    throw new Error(
+      `Configured app entry not found: ${resolved}\n` +
+      `  (set via ingest.appEntry in .nexo/config.json)`
+    );
+  }
+
+  const candidates = DEFAULTS.ingest.appEntryCandidates.map(
+    (c) => join(frontendPath, c)
+  );
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `No App entry file found in ${frontendPath}. Checked:\n` +
+    candidates.map((c) => `  - ${c}`).join("\n") +
+    `\n  Hint: set ingest.appEntry in .nexo/config.json`
+  );
+}
+
+/**
  * Run the full ingest sync. Dry-run by default unless opts.apply is true.
  */
 export async function runSync(client: GraphClient, opts: SyncOptions): Promise<SyncResults> {
@@ -51,14 +111,14 @@ export async function runSync(client: GraphClient, opts: SyncOptions): Promise<S
 
   // Sync APIEndpoints from SAM template
   if (opts.backendPath) {
-    const templatePath = `${opts.backendPath}/unified-stack/template.yaml`;
+    const templatePath = findSamTemplate(opts.backendPath, opts.samTemplate);
     parsedEndpoints = parseSamTemplate(templatePath);
     await syncEndpoints(client, parsedEndpoints, opts, results.endpoints);
   }
 
-  // Sync Screens from App.jsx
+  // Sync Screens from App.jsx/tsx
   if (opts.frontendPath) {
-    const appPath = `${opts.frontendPath}/src/App.jsx`;
+    const appPath = findAppEntry(opts.frontendPath, opts.appEntry);
     parsedScreens = parseRoutes(appPath);
     await syncScreens(client, parsedScreens, opts, results.screens);
   }
@@ -67,11 +127,11 @@ export async function runSync(client: GraphClient, opts: SyncOptions): Promise<S
   const allSourceFiles: ParsedSourceFile[] = [];
   if (opts.frontendPath) {
     const repoName = basename(resolve(opts.frontendPath));
-    allSourceFiles.push(...parseSourceFiles(opts.frontendPath, repoName));
+    allSourceFiles.push(...parseSourceFiles(opts.frontendPath, repoName, opts.skipDirs));
   }
   if (opts.backendPath) {
     const repoName = basename(resolve(opts.backendPath));
-    allSourceFiles.push(...parseSourceFiles(opts.backendPath, repoName));
+    allSourceFiles.push(...parseSourceFiles(opts.backendPath, repoName, opts.skipDirs));
   }
   if (allSourceFiles.length > 0) {
     await syncSourceFiles(client, allSourceFiles, opts, results.sourceFiles);
@@ -235,6 +295,7 @@ async function syncImplementedInEdges(
   const config = {
     frontendRoot: opts.frontendPath,
     backendRoot: opts.backendPath,
+    handlerSourceRoots: opts.handlerSourceRoots,
   };
 
   // Match API endpoints to handler files

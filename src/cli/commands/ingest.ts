@@ -33,6 +33,10 @@ export const ingestCommand = new Command("ingest")
         frontendPath: frontend,
         backendPath: backend,
         apply: Boolean(opts.apply),
+        samTemplate: cfg.ingest?.samTemplate,
+        appEntry: cfg.ingest?.appEntry,
+        handlerSourceRoots: cfg.ingest?.handlerSourceRoots,
+        skipDirs: cfg.ingest?.skipDirs,
       });
 
       printSyncResults(results, Boolean(opts.apply));

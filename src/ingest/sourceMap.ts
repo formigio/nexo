@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "fs";
 import { join, resolve } from "path";
 import type { Surreal } from "surrealdb";
 import { listEdges } from "../db/edges.js";
+import { DEFAULTS } from "../config/schema.js";
 import type { Node } from "../schema/types.js";
 import type { ParsedEndpoint } from "./parsers/sam.js";
 import type { ParsedScreen } from "./parsers/routes.js";
@@ -9,6 +10,7 @@ import type { ParsedScreen } from "./parsers/routes.js";
 export interface SourceMapConfig {
   frontendRoot?: string;
   backendRoot?: string;
+  handlerSourceRoots?: string[];
 }
 
 /**
@@ -23,19 +25,16 @@ export function endpointSourceFile(
 
   // Handler format: "api/trips.handler" → src/api/trips.js (or .ts, .mjs, etc.)
   const handlerPath = ep.handler.replace(/\.[^.]+$/, ""); // strip .handler
-  const srcRoot = join(resolve(config.backendRoot), "unified-stack", "src");
+  const roots = config.handlerSourceRoots ?? DEFAULTS.ingest.handlerSourceRoots;
+  const backendRoot = resolve(config.backendRoot);
   const extensions = [".js", ".ts", ".mjs", ".cjs"];
 
-  for (const ext of extensions) {
-    const candidate = join(srcRoot, handlerPath + ext);
-    if (existsSync(candidate)) return candidate;
-  }
-
-  // Try without unified-stack subdirectory
-  const altRoot = resolve(config.backendRoot);
-  for (const ext of extensions) {
-    const candidate = join(altRoot, "src", handlerPath + ext);
-    if (existsSync(candidate)) return candidate;
+  for (const root of roots) {
+    const srcRoot = join(backendRoot, root);
+    for (const ext of extensions) {
+      const candidate = join(srcRoot, handlerPath + ext);
+      if (existsSync(candidate)) return candidate;
+    }
   }
 
   return null;
